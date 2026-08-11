@@ -1,0 +1,85 @@
+name: build
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: harbor.10.0.0.200.nip.io
+  IMAGE: harbor.10.0.0.200.nip.io/library/erpnext-ktayl
+  ERPNEXT_VERSION: v16.28.0
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Connect Tailscale
+        uses: tailscale/github-action@v4.1.3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Trust minicloud CA
+        run: |
+          sudo mkdir -p /etc/docker/certs.d/harbor.10.0.0.200.nip.io
+          echo "${{ secrets.MINICLOUD_CA_CERT }}" \
+            | sudo tee /etc/docker/certs.d/harbor.10.0.0.200.nip.io/ca.crt
+          echo "${{ secrets.MINICLOUD_CA_CERT }}" \
+            | sudo tee /usr/local/share/ca-certificates/minicloud-ca.crt
+          sudo update-ca-certificates
+
+      - name: Set image tag
+        id: tag
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "tag=${{ env.ERPNEXT_VERSION }}-facturx" >> "$GITHUB_OUTPUT"
+            echo "extra_tag=${{ env.ERPNEXT_VERSION }}-facturx-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=dev-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "extra_tag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.HARBOR_USER }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+            ${{ steps.tag.outputs.extra_tag && format('{0}:{1}', env.IMAGE, steps.tag.outputs.extra_tag) || '' }}
+          build-args: |
+            CA_CERT=${{ secrets.MINICLOUD_CA_CERT }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Update gitops manifest (main only)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git clone https://x-access-token:${{ secrets.GITOPS_TOKEN }}@github.com/andrelair-platform/minicloud-gitops.git /tmp/gitops
+          cd /tmp/gitops
+          sed -i "s|repository: harbor.10.0.0.200.nip.io/library/erpnext-ktayl.*|repository: harbor.10.0.0.200.nip.io/library/erpnext-ktayl|" \
+            helm-values/minicloud-1/erpnext-values.yaml
+          sed -i "s|tag: .*-facturx.*|tag: ${{ steps.tag.outputs.tag }}|" \
+            helm-values/minicloud-1/erpnext-values.yaml
+          git config user.name 'AndreLiar'
+          git config user.email 'andrelaurelyvan.kanmegnetabouguie@ynov.com'
+          git add helm-values/minicloud-1/erpnext-values.yaml
+          git diff --cached --quiet || git commit -m "chore(erpnext): update image to ${{ steps.tag.outputs.tag }}"
+          git push origin main
