@@ -44,11 +44,6 @@ def submit_dsn(dsn_bytes: bytes, filename: str) -> dict:
     # de Raccordement). Set DSN_ENDPOINT in Vault secret/platform/net-entreprises.
     endpoint = os.environ.get("DSN_ENDPOINT", "")
 
-    if not login or not password:
-        raise RuntimeError(
-            "DSN_LOGIN / DSN_PASSWORD environment variables not set. "
-            "Add credentials to Vault secret/platform/net-entreprises."
-        )
     if not endpoint:
         raise RuntimeError(
             "DSN_ENDPOINT not set. Obtain the qualification URL from the "
