@@ -1,0 +1,46 @@
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: minicloud-erpnext
+  description: |
+    Custom ERPNext image for the ktayl solution insurance IS.
+    Extends frappe/erpnext:v16.28.0 with the erpnext_facturx Frappe app,
+    which generates Factur-X Minimum CII XML on every submitted Sales Invoice
+    (on_submit hook — 13/13 EN 16931 assertions pass). CI pipeline matches
+    the minicloud-open-webui pattern: Trivy + Cosign + SBOM + GPG-signed
+    GitOps bump to minicloud-gitops on every main push.
+  annotations:
+    backstage.io/source-location: url:https://github.com/andrelair-platform/minicloud-erpnext
+    github.com/project-slug: andrelair-platform/minicloud-erpnext
+    argocd/app-name: erpnext
+    backstage.io/kubernetes-id: erpnext
+    backstage.io/techdocs-ref: url:https://andrelair-platform.github.io/minicloud-platform-docs/developer-platform/erpnext-facturx-custom-image
+  tags:
+    - frappe
+    - erpnext
+    - erp
+    - insurance
+    - facturx
+    - e-invoicing
+    - python
+    - finance
+    - phase-79
+  links:
+    - url: https://erp.devandre.sbs
+      title: ERPNext (ERP & Finance IS)
+      icon: web
+    - url: https://andrelair-platform.github.io/minicloud-platform-docs/developer-platform/erpnext-hr
+      title: Docs — Phase 79 ERPNext HR
+      icon: docs
+    - url: https://andrelair-platform.github.io/minicloud-platform-docs/developer-platform/erpnext-french-insurance-config
+      title: Docs — ERP-1 French Insurance Config
+      icon: docs
+    - url: https://andrelair-platform.github.io/minicloud-platform-docs/developer-platform/erpnext-facturx-custom-image
+      title: Docs — ERP-3 Factur-X Custom Image
+      icon: docs
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/andrelair-platform
+  system: minicloud-platform
