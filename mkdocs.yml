@@ -1,0 +1,7 @@
+site_name: minicloud-erpnext
+site_description: Custom ERPNext image for the ktayl solution insurance IS
+docs_dir: docs
+nav:
+  - Overview: index.md
+  - Factur-X Hook: facturx.md
+  - Operations: ops.md

@@ -12,6 +12,7 @@ metadata:
     GitOps bump to minicloud-gitops on every main push.
   annotations:
     backstage.io/source-location: url:https://github.com/andrelair-platform/minicloud-erpnext
+    backstage.io/techdocs-ref: dir:.
     github.com/project-slug: andrelair-platform/minicloud-erpnext
     argocd/app-name: erpnext
     backstage.io/kubernetes-label-selector: 'app.kubernetes.io/app=frappe'
@@ -44,3 +45,130 @@ spec:
   lifecycle: production
   owner: group:default/andrelair-platform
   system: minicloud-platform
+  dependsOn:
+    - resource:default/erpnext-mariadb
+    - resource:default/erpnext-valkey-cache
+    - resource:default/erpnext-valkey-queue
+  providesApis:
+    - api:default/erpnext-rest-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: erpnext-mariadb
+  description: MariaDB 10.6 database for ERPNext — Longhorn 8 Gi PVC pinned to set-hog
+  annotations:
+    backstage.io/source-location: url:https://github.com/andrelair-platform/minicloud-erpnext
+spec:
+  type: database
+  lifecycle: production
+  owner: group:default/andrelair-platform
+  system: minicloud-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: erpnext-valkey-cache
+  description: Valkey (Redis fork) in-memory cache for Frappe page/session caching
+  annotations:
+    backstage.io/source-location: url:https://github.com/andrelair-platform/minicloud-erpnext
+spec:
+  type: database
+  lifecycle: production
+  owner: group:default/andrelair-platform
+  system: minicloud-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: erpnext-valkey-queue
+  description: Valkey (Redis fork) background job queue for Frappe workers and socketio
+  annotations:
+    backstage.io/source-location: url:https://github.com/andrelair-platform/minicloud-erpnext
+spec:
+  type: database
+  lifecycle: production
+  owner: group:default/andrelair-platform
+  system: minicloud-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: erpnext-rest-api
+  description: |
+    Frappe/ERPNext REST + RPC API. CRUD on all doctypes (SalesInvoice, Customer,
+    Account, etc.) via /api/resource/{DocType}, plus RPC method calls via
+    /api/method/{dotted.path}. Used by erpnext_facturx hook and n8n workflows.
+  annotations:
+    backstage.io/source-location: url:https://github.com/andrelair-platform/minicloud-erpnext
+  links:
+    - url: https://erp.devandre.sbs/api/method/frappe.utils.swagger.get_swagger_spec
+      title: Swagger spec (requires login)
+      icon: web
+spec:
+  type: openapi
+  lifecycle: production
+  owner: group:default/andrelair-platform
+  system: minicloud-platform
+  definition: |
+    openapi: "3.0.0"
+    info:
+      title: ERPNext REST API
+      version: v16.28.0
+      description: |
+        Frappe/ERPNext REST + RPC API. Endpoints follow the pattern
+        /api/resource/{DocType} for CRUD and /api/method/{dotted.path} for RPC.
+        Full spec available at /api/method/frappe.utils.swagger.get_swagger_spec
+        (requires authenticated session).
+    servers:
+      - url: https://erp.devandre.sbs
+    paths:
+      /api/resource/Sales Invoice:
+        get:
+          summary: List sales invoices
+          parameters:
+            - name: filters
+              in: query
+              schema:
+                type: string
+              description: JSON-encoded filter list e.g. [["status","=","Submitted"]]
+          responses:
+            "200":
+              description: Paginated list of Sales Invoice records
+        post:
+          summary: Create a draft sales invoice
+          responses:
+            "200":
+              description: Created invoice document
+      /api/resource/Customer:
+        get:
+          summary: List customers
+          responses:
+            "200":
+              description: Paginated list of Customer records
+      /api/resource/Account:
+        get:
+          summary: List chart of accounts entries
+          responses:
+            "200":
+              description: Paginated list of Account records
+      /api/method/erpnext_facturx.api.get_facturx_xml:
+        post:
+          summary: Return the Factur-X Minimum CII XML for a submitted invoice
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    invoice_name:
+                      type: string
+                      example: ACC-SINV-2026-00001-1
+          responses:
+            "200":
+              description: Factur-X Minimum CII XML (UTF-8)
+              content:
+                application/xml:
+                  schema:
+                    type: string
