@@ -22,12 +22,6 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-# Net-Entreprises deposit endpoints
-_ENDPOINTS = {
-    "qualification": "https://qualif01.net-entreprises.fr/srm/service/dsn-api/depot",
-    "production": "https://www.net-entreprises.fr/srm/service/dsn-api/depot",
-}
-
 _TIMEOUT_S = 60
 
 
@@ -46,13 +40,20 @@ def submit_dsn(dsn_bytes: bytes, filename: str) -> dict:
     """
     login = os.environ.get("DSN_LOGIN", "")
     password = os.environ.get("DSN_PASSWORD", "")
-    test_mode = os.environ.get("DSN_TEST_MODE", "true").lower() in ("true", "1", "yes")
-    endpoint = _ENDPOINTS["qualification"] if test_mode else _ENDPOINTS["production"]
+    # Endpoint is provided by Net-Entreprises after account creation (Cahier Technique
+    # de Raccordement). Set DSN_ENDPOINT in Vault secret/platform/net-entreprises.
+    endpoint = os.environ.get("DSN_ENDPOINT", "")
 
     if not login or not password:
         raise RuntimeError(
             "DSN_LOGIN / DSN_PASSWORD environment variables not set. "
             "Add credentials to Vault secret/platform/net-entreprises."
+        )
+    if not endpoint:
+        raise RuntimeError(
+            "DSN_ENDPOINT not set. Obtain the qualification URL from the "
+            "Net-Entreprises Cahier Technique de Raccordement after account creation, "
+            "then: vault kv patch secret/platform/net-entreprises endpoint=<url>"
         )
 
     files = {
