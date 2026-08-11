@@ -12,7 +12,7 @@ metadata:
     GitOps bump to minicloud-gitops on every main push.
   annotations:
     backstage.io/source-location: url:https://github.com/andrelair-platform/minicloud-erpnext
-    backstage.io/techdocs-ref: dir:.
+    backstage.io/techdocs-ref: url:https://github.com/andrelair-platform/minicloud-erpnext/tree/main
     github.com/project-slug: andrelair-platform/minicloud-erpnext
     argocd/app-name: erpnext
     backstage.io/kubernetes-label-selector: 'app.kubernetes.io/app=frappe'
