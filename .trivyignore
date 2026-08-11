@@ -1,0 +1,28 @@
+# Accepted risks — all CVEs below are in frappe/erpnext:v16.28.0 base image.
+# None are introduced by our layers (factur-x, pypdf, erpnext_facturx app).
+# Remediation: upgrade ERPNext base image when upstream ships a fixed release.
+
+# chromium-common / chromium-headless-shell (Debian package, used for PDF generation)
+CVE-2026-15764
+CVE-2026-15765
+CVE-2026-17651
+CVE-2026-17652
+CVE-2026-17653
+CVE-2026-17654
+CVE-2026-17655
+CVE-2026-17656
+
+# libgnutls30 (Debian base package)
+CVE-2026-33845
+CVE-2026-42010
+
+# loader-utils, shell-quote, tar (Node.js deps in ERPNext banking module)
+CVE-2022-37601
+CVE-2026-9277
+CVE-2026-59873
+
+# Go stdlib (binary embedded in base image)
+CVE-2023-24538
+CVE-2023-24540
+CVE-2024-24790
+CVE-2025-68121
