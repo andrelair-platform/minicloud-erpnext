@@ -14,7 +14,8 @@ metadata:
     backstage.io/source-location: url:https://github.com/andrelair-platform/minicloud-erpnext
     github.com/project-slug: andrelair-platform/minicloud-erpnext
     argocd/app-name: erpnext
-    backstage.io/kubernetes-id: erpnext
+    backstage.io/kubernetes-label-selector: 'app.kubernetes.io/app=frappe'
+    backstage.io/kubernetes-namespace: erp
   tags:
     - frappe
     - erpnext
