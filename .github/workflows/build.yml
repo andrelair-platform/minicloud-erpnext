@@ -2,20 +2,44 @@ name: build
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, staging, dev]
   pull_request:
     branches: [main]
 
 env:
   REGISTRY: harbor.10.0.0.200.nip.io
-  IMAGE: harbor.10.0.0.200.nip.io/library/erpnext-ktayl
+  IMAGE_NAME: library/erpnext-ktayl
+  GITOPS_REPO: andrelair-platform/minicloud-gitops
   ERPNEXT_VERSION: v16.28.0
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+      digest: ${{ steps.build.outputs.digest }}
+      branch: ${{ steps.meta.outputs.branch }}
+
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute build metadata
+        id: meta
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          BRANCH=${GITHUB_REF_NAME}
+          if [ "$BRANCH" = "main" ]; then
+            TAG="${{ env.ERPNEXT_VERSION }}-facturx-${SHA}"
+          else
+            TAG="${BRANCH}-${SHA}"
+          fi
+          echo "image_tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
 
       - name: Connect Tailscale
         uses: tailscale/github-action@v4.1.3
@@ -26,26 +50,14 @@ jobs:
 
       - name: Trust minicloud CA
         run: |
-          sudo mkdir -p /etc/docker/certs.d/harbor.10.0.0.200.nip.io
+          sudo mkdir -p /etc/docker/certs.d/${{ env.REGISTRY }}
           echo "${{ secrets.MINICLOUD_CA_CERT }}" \
-            | sudo tee /etc/docker/certs.d/harbor.10.0.0.200.nip.io/ca.crt
+            | sudo tee /etc/docker/certs.d/${{ env.REGISTRY }}/ca.crt
           echo "${{ secrets.MINICLOUD_CA_CERT }}" \
             | sudo tee /usr/local/share/ca-certificates/minicloud-ca.crt
           sudo update-ca-certificates
 
-      - name: Set image tag
-        id: tag
-        run: |
-          SHORT_SHA=$(git rev-parse --short HEAD)
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "tag=${{ env.ERPNEXT_VERSION }}-facturx" >> "$GITHUB_OUTPUT"
-            echo "extra_tag=${{ env.ERPNEXT_VERSION }}-facturx-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=dev-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-            echo "extra_tag=" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Log in to Harbor
+      - name: Login to Harbor
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -60,30 +72,130 @@ jobs:
               insecure = true
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
-            ${{ steps.tag.outputs.extra_tag && format('{0}:{1}', env.IMAGE, steps.tag.outputs.extra_tag) || '' }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.image_tag }}
           build-args: |
             CA_CERT=${{ secrets.MINICLOUD_CA_CERT }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Update gitops manifest (main only)
-        if: github.ref == 'refs/heads/main'
+      - name: Scan image for vulnerabilities (Trivy)
+        if: github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          format: table
+          exit-code: '1'
+          severity: CRITICAL
+          ignore-unfixed: true
+          timeout: 15m
+
+      - name: Install Cosign
+        if: github.ref_name != 'dev' && github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3
+
+      - name: Install syft
+        if: github.ref_name == 'main'
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Generate SBOM (CycloneDX JSON)
+        if: github.ref_name == 'main'
         run: |
-          git clone https://x-access-token:${{ secrets.GITOPS_TOKEN }}@github.com/andrelair-platform/minicloud-gitops.git /tmp/gitops
-          cd /tmp/gitops
-          sed -i "s|repository: harbor.10.0.0.200.nip.io/library/erpnext-ktayl.*|repository: harbor.10.0.0.200.nip.io/library/erpnext-ktayl|" \
+          syft ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }} \
+            -o cyclonedx-json=sbom.json
+
+      - name: Sign image
+        if: github.ref_name != 'dev' && github.event_name != 'pull_request'
+        run: |
+          cosign sign --yes \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+
+      - name: Attach SBOM to image as OCI referrer
+        if: github.ref_name == 'main'
+        run: |
+          cosign attach sbom \
+            --sbom sbom.json \
+            --type cyclonedx \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+
+  bump-gitops:
+    needs: build-and-push
+    if: needs.build-and-push.outputs.branch == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Connect Tailscale
+        uses: tailscale/github-action@v4.1.3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Trust minicloud CA
+        run: |
+          echo "${{ secrets.MINICLOUD_CA_CERT }}" \
+            | sudo tee /usr/local/share/ca-certificates/minicloud-ca.crt
+          sudo update-ca-certificates
+
+      - name: Checkout minicloud-gitops
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          token: ${{ secrets.GITOPS_TOKEN }}
+
+      - name: Import GPG signing key
+        uses: crazy-max/ghaction-import-gpg@v7
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+
+      - name: Verify image exists in Harbor
+        run: |
+          TAG="${{ needs.build-and-push.outputs.image_tag }}"
+          URL="https://${{ env.REGISTRY }}/v2/${{ env.IMAGE_NAME }}/manifests/${TAG}"
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" \
+            --cacert /usr/local/share/ca-certificates/minicloud-ca.crt \
+            -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json" \
+            -H "Authorization: Basic $(echo -n '${{ secrets.HARBOR_USER }}:${{ secrets.HARBOR_PASSWORD }}' | base64)" \
+            "$URL")
+          if [ "$STATUS" != "200" ]; then
+            echo "Image $TAG not found in Harbor (HTTP $STATUS) — aborting gitops bump"
+            exit 1
+          fi
+          echo "Image $TAG confirmed in Harbor (HTTP $STATUS)"
+
+      - name: Bump image tag in erpnext-values.yaml
+        env:
+          NEW_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+        run: |
+          sed -i "s|^  repository: .*|  repository: harbor.10.0.0.200.nip.io/library/erpnext-ktayl|" \
             helm-values/minicloud-1/erpnext-values.yaml
-          sed -i "s|tag: .*-facturx.*|tag: ${{ steps.tag.outputs.tag }}|" \
+          sed -i "s|^  tag: .*facturx.*|  tag: \"${NEW_TAG}\"|" \
             helm-values/minicloud-1/erpnext-values.yaml
-          git config user.name 'AndreLiar'
-          git config user.email 'andrelaurelyvan.kanmegnetabouguie@ynov.com'
           git add helm-values/minicloud-1/erpnext-values.yaml
-          git diff --cached --quiet || git commit -m "chore(erpnext): update image to ${{ steps.tag.outputs.tag }}"
-          git push origin main
+          if git diff --cached --quiet; then
+            echo "No change — already at ${NEW_TAG}"
+            exit 0
+          fi
+          BRANCH="ci/erpnext-bump-${NEW_TAG}"
+          git checkout -b "${BRANCH}"
+          git commit -S -m "ci(erpnext): bump image to ${NEW_TAG}"
+          git push origin "${BRANCH}"
+          gh pr create \
+            --repo "${{ env.GITOPS_REPO }}" \
+            --title "ci(erpnext): bump image to ${NEW_TAG}" \
+            --body "Automated image bump from minicloud-erpnext CI." \
+            --head "${BRANCH}" \
+            --base main
+          gh pr merge \
+            --repo "${{ env.GITOPS_REPO }}" \
+            --admin \
+            --merge \
+            --delete-branch \
+            "ci/erpnext-bump-${NEW_TAG}"
