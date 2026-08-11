@@ -6,7 +6,6 @@ USER root
 
 RUN /home/frappe/frappe-bench/env/bin/pip install \
     "factur-x==2.0.0" \
-    "pypdf==5.1.0" \
     --no-cache-dir
 
 RUN if [ -n "${CA_CERT}" ]; then \
