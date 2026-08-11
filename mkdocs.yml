@@ -5,3 +5,4 @@ nav:
   - Overview: index.md
   - Factur-X Hook: facturx.md
   - Operations: ops.md
+  - Backstage Catalog: catalog.md
