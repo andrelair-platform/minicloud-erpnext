@@ -97,14 +97,24 @@ def submit_dsn(dsn_bytes: bytes, filename: str) -> dict:
 
 def _response_is_ok(body: str) -> bool:
     """
-    Net-Entreprises returns an XML or JSON body indicating acceptance or rejection.
-    A '200' HTTP status alone is not sufficient — the body must not contain error codes.
+    Parse CRM (Compte Rendu Métier) XML returned by Net-Entreprises.
 
-    Adjust this parser once the real qualification response format is confirmed
-    from the Net-Entreprises technical documentation (available after account creation).
+    ACCEPTE  + codeRetour 00 → True
+    REJETE   or codeRetour ≠ 00 → False
+    Non-XML fallback: check for SOAP fault indicators.
     """
-    body_lower = body.lower()
-    # Common error indicators in Net-Entreprises DSN API responses
-    if any(k in body_lower for k in ("erreur", "error", "rejet", "ko", "<fault")):
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(body.strip())
+        ns = {"crm": "urn:net-entreprises:crm:1.0"}
+        etat = root.findtext("crm:etatTraitement", default="", namespaces=ns)
+        code = root.findtext("crm:codeRetour", default="", namespaces=ns)
+        if etat.upper() == "ACCEPTE" and code == "00":
+            return True
         return False
-    return True
+    except ET.ParseError:
+        # Not XML — fall back to SOAP fault check only
+        body_lower = body.lower()
+        if any(k in body_lower for k in ("<fault", "faultcode", "faultstring")):
+            return False
+        return True

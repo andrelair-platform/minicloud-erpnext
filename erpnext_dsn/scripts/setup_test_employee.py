@@ -15,12 +15,14 @@ from frappe.utils import now_datetime
 frappe.init(site="erp.devandre.sbs")
 frappe.connect()
 
-COMPANY = "ktayl solution"  # must match the ERPNext company name
+COMPANY = "Ktayl Solutions"  # must match the ERPNext company name
 
 # ---------------------------------------------------------------------------
 # 1. Department
+# ERPNext appends " - KS" (company abbreviation) to department names.
 # ---------------------------------------------------------------------------
-if not frappe.db.exists("Department", {"department_name": "Assurance", "company": COMPANY}):
+DEPT_NAME = "Assurance - KS"
+if not frappe.db.exists("Department", DEPT_NAME):
     dept = frappe.get_doc({
         "doctype": "Department",
         "department_name": "Assurance",
@@ -28,9 +30,9 @@ if not frappe.db.exists("Department", {"department_name": "Assurance", "company"
         "parent_department": "All Departments",
     })
     dept.insert(ignore_permissions=True)
-    print("Created department: Assurance")
+    print(f"Created department: {DEPT_NAME}")
 else:
-    print("Department Assurance already exists")
+    print(f"Department {DEPT_NAME} already exists")
 
 # ---------------------------------------------------------------------------
 # 2. Employee — Jean Dupont (NIR fictif pour qualification Net-Entreprises)
@@ -49,7 +51,7 @@ if not frappe.db.exists("Employee", EMP_ID):
         "company": COMPANY,
         "status": "Active",
         "employment_type": "CDI",
-        "department": "Assurance",
+        "department": DEPT_NAME,
         "date_of_joining": "2023-01-02",
         "date_of_birth": "1982-01-15",
         "gender": "Male",
