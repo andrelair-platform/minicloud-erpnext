@@ -1,0 +1,170 @@
+{
+  "name": "SEPA — Sales Invoice → Stripe PaymentIntent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "erpnext-invoice-submit",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "trigger",
+      "name": "ERPNext Invoice Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "erpnext-invoice-submit"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst doc = body.data || body;\nreturn [{\n  json: {\n    invoice_name: doc.name,\n    customer: doc.customer,\n    grand_total: doc.grand_total,\n    currency: (doc.currency || 'EUR').toLowerCase(),\n    company: doc.company\n  }\n}];"
+      },
+      "id": "extract",
+      "name": "Extract Invoice Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.ERPNEXT_URL }}/api/resource/Customer/{{ $json.customer }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "fields", "value": "[\"name\",\"stripe_customer_id\",\"stripe_payment_method_id\"]" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-customer",
+      "name": "Get ERPNext Customer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 300],
+      "credentials": { "httpBasicAuth": { "id": "erpnext-admin", "name": "ERPNext Admin" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "conditions": [
+            {
+              "id": "has-pm",
+              "leftValue": "={{ $json.data.stripe_payment_method_id }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty" }
+            }
+          ]
+        }
+      },
+      "id": "check-pm",
+      "name": "Has Payment Method?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.STRIPE_BASE_URL }}/v1/payment_intents",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/x-www-form-urlencoded" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "amount", "value": "={{ Math.round($('Extract Invoice Fields').first().json.grand_total * 100) }}" },
+            { "name": "currency", "value": "={{ $('Extract Invoice Fields').first().json.currency }}" },
+            { "name": "customer", "value": "={{ $('Get ERPNext Customer').first().json.data.stripe_customer_id }}" },
+            { "name": "payment_method", "value": "={{ $('Get ERPNext Customer').first().json.data.stripe_payment_method_id }}" },
+            { "name": "payment_method_types[]", "value": "sepa_debit" },
+            { "name": "confirm", "value": "true" },
+            { "name": "off_session", "value": "true" },
+            { "name": "metadata[erpnext_invoice]", "value": "={{ $('Extract Invoice Fields').first().json.invoice_name }}" },
+            { "name": "description", "value": "={{ $('Extract Invoice Fields').first().json.invoice_name }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "create-intent",
+      "name": "Create Stripe PaymentIntent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1120, 200],
+      "credentials": { "httpHeaderAuth": { "id": "stripe-secret-key", "name": "Stripe Secret Key" } }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.ERPNEXT_URL }}/api/resource/Sales Invoice/{{ $('Extract Invoice Fields').first().json.invoice_name }}",
+        "method": "PUT",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"stripe_payment_intent_id\": \"{{ $json.id }}\",\n  \"stripe_payment_status\": \"{{ $json.status }}\"\n}",
+        "options": {}
+      },
+      "id": "store-intent-id",
+      "name": "Store Intent ID on Invoice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1340, 200],
+      "credentials": { "httpBasicAuth": { "id": "erpnext-admin", "name": "ERPNext Admin" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\", \"stripe_payment_intent_id\": \"{{ $('Create Stripe PaymentIntent').first().json.id }}\", \"stripe_status\": \"{{ $('Create Stripe PaymentIntent').first().json.status }}\" }"
+      },
+      "id": "respond-ok",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"error\", \"reason\": \"no_payment_method\", \"customer\": \"{{ $('Extract Invoice Fields').first().json.customer }}\", \"hint\": \"Run setup_stripe_customer.py for this customer first\" }"
+      },
+      "id": "respond-no-pm",
+      "name": "Respond No Payment Method",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 400]
+    }
+  ],
+  "connections": {
+    "ERPNext Invoice Webhook":      { "main": [[{ "node": "Extract Invoice Fields",    "type": "main", "index": 0 }]] },
+    "Extract Invoice Fields":       { "main": [[{ "node": "Get ERPNext Customer",       "type": "main", "index": 0 }]] },
+    "Get ERPNext Customer":         { "main": [[{ "node": "Has Payment Method?",        "type": "main", "index": 0 }]] },
+    "Has Payment Method?": {
+      "main": [
+        [{ "node": "Create Stripe PaymentIntent", "type": "main", "index": 0 }],
+        [{ "node": "Respond No Payment Method",   "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Stripe PaymentIntent":  { "main": [[{ "node": "Store Intent ID on Invoice", "type": "main", "index": 0 }]] },
+    "Store Intent ID on Invoice":   { "main": [[{ "node": "Respond OK",                 "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": {
+    "description": "Triggered by ERPNext webhook on Sales Invoice submit. Creates a Stripe SEPA PaymentIntent (off-session, confirmed immediately) against the customer's saved payment method. Stores the intent ID on the invoice. Stripe fires payment_intent.succeeded → ERPNext webhook receiver → Payment Entry.",
+    "n8n_credentials_required": [
+      "ERPNext Admin (httpBasicAuth) — Administrator:password",
+      "Stripe Secret Key (httpHeaderAuth) — Authorization: Bearer sk_test_..."
+    ],
+    "env_vars_required": [
+      "ERPNEXT_URL=https://erp.devandre.sbs",
+      "STRIPE_BASE_URL=https://api.stripe.com"
+    ]
+  }
+}

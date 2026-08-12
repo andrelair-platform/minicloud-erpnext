@@ -3,3 +3,4 @@ pytest-cov>=5.0
 ruff>=0.6.0
 mypy>=1.11
 requests>=2.31.0
+stripe>=10.0
