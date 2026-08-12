@@ -1,0 +1,154 @@
+{
+  "name": "SEPA — Sales Invoice → GoCardless Payment",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "erpnext-invoice-submit",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "trigger",
+      "name": "ERPNext Invoice Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "erpnext-invoice-submit"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst doc = body.data || body;\nreturn [{\n  json: {\n    invoice_name: doc.name,\n    customer: doc.customer,\n    grand_total: doc.grand_total,\n    currency: doc.currency || 'EUR',\n    company: doc.company\n  }\n}];"
+      },
+      "id": "extract",
+      "name": "Extract Invoice Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.ERPNEXT_URL }}/api/resource/Customer/{{ $json.customer }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "fields", "value": "[\"name\",\"gc_customer_id\",\"gc_mandate_id\",\"customer_primary_contact\"]" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-customer",
+      "name": "Get ERPNext Customer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 300],
+      "credentials": { "httpBasicAuth": { "id": "erpnext-admin", "name": "ERPNext Admin" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "conditions": [
+            {
+              "id": "has-mandate",
+              "leftValue": "={{ $json.data.gc_mandate_id }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty" }
+            }
+          ]
+        }
+      },
+      "id": "check-mandate",
+      "name": "Has Mandate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.GC_BASE_URL }}/payments",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "GoCardless-Version", "value": "2015-07-06" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": []
+        },
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"payments\": {\n    \"amount\": {{ Math.round($('Extract Invoice Fields').first().json.grand_total * 100) }},\n    \"currency\": \"{{ $('Extract Invoice Fields').first().json.currency }}\",\n    \"description\": \"{{ $('Extract Invoice Fields').first().json.invoice_name }}\",\n    \"links\": {\n      \"mandate\": \"{{ $('Get ERPNext Customer').first().json.data.gc_mandate_id }}\"\n    },\n    \"metadata\": {\n      \"erpnext_invoice\": \"{{ $('Extract Invoice Fields').first().json.invoice_name }}\"\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "create-payment",
+      "name": "Create GoCardless Payment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1120, 200],
+      "credentials": { "httpHeaderAuth": { "id": "gocardless-sandbox", "name": "GoCardless Sandbox" } }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.ERPNEXT_URL }}/api/resource/Sales Invoice/{{ $('Extract Invoice Fields').first().json.invoice_name }}",
+        "method": "PUT",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"gc_payment_id\": \"{{ $json.payments.id }}\",\n  \"gc_payment_status\": \"{{ $json.payments.status }}\"\n}",
+        "options": {}
+      },
+      "id": "store-payment-id",
+      "name": "Store Payment ID on Invoice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1340, 200],
+      "credentials": { "httpBasicAuth": { "id": "erpnext-admin", "name": "ERPNext Admin" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\", \"gc_payment_id\": \"{{ $('Create GoCardless Payment').first().json.payments.id }}\" }"
+      },
+      "id": "respond-ok",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"error\", \"reason\": \"no_mandate\", \"customer\": \"{{ $('Extract Invoice Fields').first().json.customer }}\" }"
+      },
+      "id": "respond-no-mandate",
+      "name": "Respond No Mandate",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 400]
+    }
+  ],
+  "connections": {
+    "ERPNext Invoice Webhook": { "main": [[{ "node": "Extract Invoice Fields", "type": "main", "index": 0 }]] },
+    "Extract Invoice Fields":  { "main": [[{ "node": "Get ERPNext Customer", "type": "main", "index": 0 }]] },
+    "Get ERPNext Customer":    { "main": [[{ "node": "Has Mandate?", "type": "main", "index": 0 }]] },
+    "Has Mandate?": {
+      "main": [
+        [{ "node": "Create GoCardless Payment", "type": "main", "index": 0 }],
+        [{ "node": "Respond No Mandate", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create GoCardless Payment": { "main": [[{ "node": "Store Payment ID on Invoice", "type": "main", "index": 0 }]] },
+    "Store Payment ID on Invoice": { "main": [[{ "node": "Respond OK", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": {
+    "description": "Triggered by ERPNext webhook on Sales Invoice submit. Creates a GoCardless SEPA payment against the customer mandate and stores the payment ID on the invoice."
+  }
+}
