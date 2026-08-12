@@ -14,8 +14,8 @@ erpnext-dsn-config (fed by ESO from Vault secret/platform/net-entreprises).
 
 from __future__ import annotations
 
-import os
 import logging
+import os
 from datetime import datetime
 
 import requests
@@ -104,6 +104,7 @@ def _response_is_ok(body: str) -> bool:
     Non-XML fallback: check for SOAP fault indicators.
     """
     import xml.etree.ElementTree as ET
+
     try:
         root = ET.fromstring(body.strip())
         ns = {"crm": "urn:net-entreprises:crm:1.0"}

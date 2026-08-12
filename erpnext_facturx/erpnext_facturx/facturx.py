@@ -13,6 +13,7 @@ def generate_and_attach(doc, method=None):
     if pdf_bytes:
         try:
             from facturx import generate_from_file
+
             buf = io.BytesIO(pdf_bytes)
             out_buf = io.BytesIO()
             generate_from_file(buf, {"factur-x.xml": xml_bytes}, output_pdf_file=out_buf)
@@ -39,10 +40,15 @@ def generate_and_attach(doc, method=None):
         )
 
 
+_RSM = "urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"
+_RAM = "urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100"
+_UDT = "urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100"
+
+
 def _build_cii_xml(doc):
-    RSM = "urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"
-    RAM = "urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100"
-    UDT = "urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100"
+    RSM = _RSM  # noqa: N806
+    RAM = _RAM  # noqa: N806
+    UDT = _UDT  # noqa: N806
 
     ET.register_namespace("rsm", RSM)
     ET.register_namespace("ram", RAM)
@@ -92,15 +98,22 @@ def _build_cii_xml(doc):
     settlement = ET.SubElement(sctt, f"{{{RAM}}}ApplicableHeaderTradeSettlement")
     ET.SubElement(settlement, f"{{{RAM}}}InvoiceCurrencyCode").text = doc.currency or "EUR"
 
-    monetary = ET.SubElement(settlement, f"{{{RAM}}}SpecifiedTradeSettlementHeaderMonetarySummation")
-    ET.SubElement(monetary, f"{{{RAM}}}TaxBasisTotalAmount", {"currencyID": doc.currency or "EUR"}).text = \
-        str(round(float(doc.net_total or 0), 2))
-    tax_total = ET.SubElement(monetary, f"{{{RAM}}}TaxTotalAmount", {"currencyID": doc.currency or "EUR"})
+    monetary = ET.SubElement(
+        settlement, f"{{{RAM}}}SpecifiedTradeSettlementHeaderMonetarySummation"
+    )
+    ET.SubElement(
+        monetary, f"{{{RAM}}}TaxBasisTotalAmount", {"currencyID": doc.currency or "EUR"}
+    ).text = str(round(float(doc.net_total or 0), 2))
+    tax_total = ET.SubElement(
+        monetary, f"{{{RAM}}}TaxTotalAmount", {"currencyID": doc.currency or "EUR"}
+    )
     tax_total.text = str(round(float(doc.total_taxes_and_charges or 0), 2))
-    ET.SubElement(monetary, f"{{{RAM}}}GrandTotalAmount", {"currencyID": doc.currency or "EUR"}).text = \
-        str(round(float(doc.grand_total or 0), 2))
-    ET.SubElement(monetary, f"{{{RAM}}}DuePayableAmount", {"currencyID": doc.currency or "EUR"}).text = \
-        str(round(float(doc.outstanding_amount or doc.grand_total or 0), 2))
+    ET.SubElement(
+        monetary, f"{{{RAM}}}GrandTotalAmount", {"currencyID": doc.currency or "EUR"}
+    ).text = str(round(float(doc.grand_total or 0), 2))
+    ET.SubElement(
+        monetary, f"{{{RAM}}}DuePayableAmount", {"currencyID": doc.currency or "EUR"}
+    ).text = str(round(float(doc.outstanding_amount or doc.grand_total or 0), 2))
 
     raw = ET.tostring(root, encoding="unicode")
     pretty = minidom.parseString(raw).toprettyxml(indent="  ", encoding="UTF-8")
@@ -110,6 +123,7 @@ def _build_cii_xml(doc):
 def _get_invoice_pdf(doc):
     try:
         from frappe.utils.pdf import get_pdf
+
         html = frappe.get_print(doc.doctype, doc.name, as_pdf=False)
         return get_pdf(html)
     except Exception:
@@ -118,5 +132,6 @@ def _get_invoice_pdf(doc):
 
 def _extract_siret(registration_details):
     import re
+
     m = re.search(r"SIRET[:\s]+(\d{14})", registration_details)
     return m.group(1) if m else None

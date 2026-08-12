@@ -1,0 +1,55 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+ignore = [
+    "E501",  # line-length — handled by formatter
+    "N802",  # lowercase function names (Frappe convention)
+    "N803",  # lowercase argument names
+    "UP007", # use X | Y — Frappe compat
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["N", "B"]        # naming + opinionated in tests
+"*/scripts/*" = ["N", "T201"] # naming + print() allowed in scripts
+"*/hooks.py" = ["F401"]       # unused imports are intentional in hooks
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true   # frappe not installed outside the pod
+warn_unused_ignores = true
+warn_return_any = false
+strict = false
+
+[[tool.mypy.overrides]]
+module = ["frappe.*", "facturx.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+source = ["erpnext_dsn", "erpnext_facturx", "erpnext_sepa"]
+omit = [
+    "*/scripts/*",
+    "*/hooks.py",
+    "*/salary_hook.py",
+    "*/__init__.py",
+    "*/setup.py",
+]
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true
+skip_covered = false
