@@ -60,6 +60,7 @@ jobs:
         run: |
           pip install -e erpnext_dsn/ --no-deps
           pip install -e erpnext_facturx/ --no-deps
+          pip install -e erpnext_sepa/ --no-deps
 
       - name: pytest — unit tests with coverage
         run: |
