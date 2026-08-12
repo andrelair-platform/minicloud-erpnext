@@ -32,7 +32,7 @@ jobs:
         id: meta
         run: |
           SHA=$(git rev-parse --short HEAD)
-          BRANCH=${GITHUB_REF_NAME}
+          BRANCH=${GITHUB_REF_NAME//\//-}
           if [ "$BRANCH" = "main" ]; then
             TAG="${{ env.ERPNEXT_VERSION }}-facturx-${SHA}"
           else
