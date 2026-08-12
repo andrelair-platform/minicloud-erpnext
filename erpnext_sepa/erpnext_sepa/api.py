@@ -33,6 +33,7 @@ stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 # Public webhook receiver
 # ---------------------------------------------------------------------------
 
+
 @frappe.whitelist(allow_guest=True)
 def stripe_webhook():
     """
@@ -68,6 +69,7 @@ def stripe_webhook():
 # Status query
 # ---------------------------------------------------------------------------
 
+
 @frappe.whitelist()
 def get_payment_status(invoice: str) -> dict:
     doc = frappe.get_doc("Sales Invoice", invoice)
@@ -82,6 +84,7 @@ def get_payment_status(invoice: str) -> dict:
 # ---------------------------------------------------------------------------
 # Event handlers
 # ---------------------------------------------------------------------------
+
 
 def _handle_payment_succeeded(payment_intent: dict) -> None:
     intent_id = payment_intent["id"]
@@ -112,23 +115,21 @@ def _handle_payment_failed(payment_intent: dict) -> None:
     if not invoice_name:
         return
 
-    failure_msg = (
-        payment_intent.get("last_payment_error", {}) or {}
-    ).get("message", "unknown")
+    failure_msg = (payment_intent.get("last_payment_error", {}) or {}).get("message", "unknown")
 
     frappe.db.set_value("Sales Invoice", invoice_name, "stripe_payment_status", "failed")
     frappe.db.commit()
     frappe.log_error(
-        f"Stripe payment failed for invoice {invoice_name} "
-        f"(intent {intent_id}): {failure_msg}",
+        f"Stripe payment failed for invoice {invoice_name} (intent {intent_id}): {failure_msg}",
         "Stripe SEPA Payment Failed",
     )
 
 
 def _handle_setup_succeeded(setup_intent: dict) -> None:
-    """Store the confirmed payment method on the ERPNext Customer."""
+    """Store the confirmed SEPA mandate fields on the ERPNext Customer."""
     pm_id = setup_intent.get("payment_method")
     stripe_customer_id = setup_intent.get("customer")
+    mandate_id = setup_intent.get("mandate")
 
     if not (pm_id and stripe_customer_id):
         return
@@ -139,31 +140,54 @@ def _handle_setup_succeeded(setup_intent: dict) -> None:
         fields=["name"],
         limit=1,
     )
-    if rows:
-        frappe.db.set_value("Customer", rows[0]["name"], "stripe_payment_method_id", pm_id)
-        frappe.db.commit()
+    if not rows:
+        return
+
+    customer_name = rows[0]["name"]
+
+    # Retrieve masked IBAN display from Stripe (last4 only — PCI-safe)
+    iban_display = None
+    try:
+        pm = stripe.PaymentMethod.retrieve(pm_id)
+        sepa_obj = getattr(pm, "sepa_debit", None)
+        last4 = getattr(sepa_obj, "last4", None) if sepa_obj is not None else None
+        if last4:
+            iban_display = f"****{last4}"
+    except Exception:
+        pass  # non-critical; store mandate fields regardless
+
+    updates: dict = {
+        "stripe_payment_method_id": pm_id,
+        "sepa_mandate_status": "Actif",
+        "sepa_mandate_date": nowdate(),
+    }
+    if mandate_id:
+        updates["sepa_mandate_id"] = mandate_id
+    if iban_display:
+        updates["sepa_iban_display"] = iban_display
+
+    for field, value in updates.items():
+        frappe.db.set_value("Customer", customer_name, field, value)
+    frappe.db.commit()
 
 
 # ---------------------------------------------------------------------------
 # Payment Entry creation
 # ---------------------------------------------------------------------------
 
+
 def _create_payment_entry(invoice, intent_id: str, amount: float) -> None:
     pe = frappe.new_doc("Payment Entry")
     pe.payment_type = "Receive"
     pe.posting_date = nowdate()
     pe.company = invoice.company
-    pe.mode_of_payment = "Wire Transfer"
+    pe.mode_of_payment = "Prélèvement SEPA"
     pe.party_type = "Customer"
     pe.party = invoice.customer
     pe.paid_amount = amount
     pe.received_amount = amount
-    pe.paid_from = frappe.db.get_value(
-        "Company", invoice.company, "default_receivable_account"
-    )
-    pe.paid_to = frappe.db.get_value(
-        "Company", invoice.company, "default_bank_account"
-    )
+    pe.paid_from = frappe.db.get_value("Company", invoice.company, "default_receivable_account")
+    pe.paid_to = frappe.db.get_value("Company", invoice.company, "default_bank_account")
     pe.reference_no = intent_id
     pe.reference_date = nowdate()
     pe.append(
@@ -181,6 +205,7 @@ def _create_payment_entry(invoice, intent_id: str, amount: float) -> None:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _invoice_for_intent(intent_id: str) -> str | None:
     rows = frappe.db.get_all(

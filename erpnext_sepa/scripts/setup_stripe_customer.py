@@ -101,6 +101,7 @@ def setup_custom_fields() -> None:
 # Stripe setup
 # ---------------------------------------------------------------------------
 
+
 def create_stripe_customer(frappe_customer_name: str) -> str:
     print("Creating Stripe customer...")
     customer = stripe.Customer.create(
@@ -156,10 +157,14 @@ def confirm_setup_intent(stripe_customer_id: str, pm_id: str) -> str:
 
 def store_stripe_ids(stripe_customer_id: str, pm_id: str) -> None:
     print(f"Storing Stripe IDs on ERPNext customer '{CUSTOMER_FRAPPE_NAME}'...")
-    frappe.db.set_value("Customer", CUSTOMER_FRAPPE_NAME, {
-        "stripe_customer_id": stripe_customer_id,
-        "stripe_payment_method_id": pm_id,
-    })
+    frappe.db.set_value(
+        "Customer",
+        CUSTOMER_FRAPPE_NAME,
+        {
+            "stripe_customer_id": stripe_customer_id,
+            "stripe_payment_method_id": pm_id,
+        },
+    )
     frappe.db.commit()
     print("  Done.")
 

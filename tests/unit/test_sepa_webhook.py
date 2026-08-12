@@ -8,7 +8,7 @@ stripe.Webhook.construct_event is tested via the signature helper in mock_stripe
 """
 
 import sys
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from erpnext_sepa.api import (
@@ -52,6 +52,7 @@ SETUP_INTENT_SUCCEEDED = {
     "status": "succeeded",
     "customer": "cus_test123",
     "payment_method": "pm_sepa_test123",
+    "mandate": "mandate_test123",
 }
 
 
@@ -190,26 +191,86 @@ class TestHandleSetupSucceeded:
         self.frappe = sys.modules["frappe"]
         self.frappe.reset_mock()
 
+    def _pm_mock(self, last4: str | None = "3201") -> MagicMock:
+        sepa = MagicMock()
+        sepa.last4 = last4
+        pm = MagicMock()
+        pm.sepa_debit = sepa
+        return pm
+
     def test_stores_payment_method_on_customer(self):
         self.frappe.db.get_all.return_value = [{"name": "Cabinet Dupont"}]
-        _handle_setup_succeeded(SETUP_INTENT_SUCCEEDED)
-        self.frappe.db.set_value.assert_called_with(
+        with patch("erpnext_sepa.api.stripe") as mock_stripe:
+            mock_stripe.PaymentMethod.retrieve.return_value = self._pm_mock()
+            _handle_setup_succeeded(SETUP_INTENT_SUCCEEDED)
+        self.frappe.db.set_value.assert_any_call(
             "Customer", "Cabinet Dupont", "stripe_payment_method_id", "pm_sepa_test123"
         )
 
+    def test_stores_mandate_id_on_customer(self):
+        self.frappe.db.get_all.return_value = [{"name": "Cabinet Dupont"}]
+        with patch("erpnext_sepa.api.stripe") as mock_stripe:
+            mock_stripe.PaymentMethod.retrieve.return_value = self._pm_mock()
+            _handle_setup_succeeded(SETUP_INTENT_SUCCEEDED)
+        self.frappe.db.set_value.assert_any_call(
+            "Customer", "Cabinet Dupont", "sepa_mandate_id", "mandate_test123"
+        )
+
+    def test_stores_mandate_status_actif(self):
+        self.frappe.db.get_all.return_value = [{"name": "Cabinet Dupont"}]
+        with patch("erpnext_sepa.api.stripe") as mock_stripe:
+            mock_stripe.PaymentMethod.retrieve.return_value = self._pm_mock()
+            _handle_setup_succeeded(SETUP_INTENT_SUCCEEDED)
+        self.frappe.db.set_value.assert_any_call(
+            "Customer", "Cabinet Dupont", "sepa_mandate_status", "Actif"
+        )
+
+    def test_stores_iban_display_from_pm_last4(self):
+        self.frappe.db.get_all.return_value = [{"name": "Cabinet Dupont"}]
+        with patch("erpnext_sepa.api.stripe") as mock_stripe:
+            mock_stripe.PaymentMethod.retrieve.return_value = self._pm_mock(last4="3201")
+            _handle_setup_succeeded(SETUP_INTENT_SUCCEEDED)
+        self.frappe.db.set_value.assert_any_call(
+            "Customer", "Cabinet Dupont", "sepa_iban_display", "****3201"
+        )
+
+    def test_iban_display_skipped_when_stripe_fails(self):
+        """IBAN display is non-critical — PM retrieval failure must not abort mandate storage."""
+        self.frappe.db.get_all.return_value = [{"name": "Cabinet Dupont"}]
+        with patch("erpnext_sepa.api.stripe") as mock_stripe:
+            mock_stripe.PaymentMethod.retrieve.side_effect = Exception("network error")
+            _handle_setup_succeeded(SETUP_INTENT_SUCCEEDED)
+        # mandate_id and status must still be stored
+        self.frappe.db.set_value.assert_any_call(
+            "Customer", "Cabinet Dupont", "sepa_mandate_id", "mandate_test123"
+        )
+
+    def test_mandate_id_skipped_when_absent(self):
+        """setup_intent without mandate field must not store sepa_mandate_id."""
+        intent = {k: v for k, v in SETUP_INTENT_SUCCEEDED.items() if k != "mandate"}
+        self.frappe.db.get_all.return_value = [{"name": "Cabinet Dupont"}]
+        with patch("erpnext_sepa.api.stripe") as mock_stripe:
+            mock_stripe.PaymentMethod.retrieve.return_value = self._pm_mock()
+            _handle_setup_succeeded(intent)
+        calls = [c[0][2] for c in self.frappe.db.set_value.call_args_list]
+        assert "sepa_mandate_id" not in calls
+
     def test_no_customer_does_not_set_value(self):
         self.frappe.db.get_all.return_value = []
-        _handle_setup_succeeded(SETUP_INTENT_SUCCEEDED)
+        with patch("erpnext_sepa.api.stripe"):
+            _handle_setup_succeeded(SETUP_INTENT_SUCCEEDED)
         self.frappe.db.set_value.assert_not_called()
 
     def test_missing_payment_method_does_not_crash(self):
         intent = {**SETUP_INTENT_SUCCEEDED, "payment_method": None}
-        _handle_setup_succeeded(intent)
+        with patch("erpnext_sepa.api.stripe"):
+            _handle_setup_succeeded(intent)
         self.frappe.db.set_value.assert_not_called()
 
     def test_missing_customer_does_not_crash(self):
         intent = {**SETUP_INTENT_SUCCEEDED, "customer": None}
-        _handle_setup_succeeded(intent)
+        with patch("erpnext_sepa.api.stripe"):
+            _handle_setup_succeeded(intent)
         self.frappe.db.set_value.assert_not_called()
 
 

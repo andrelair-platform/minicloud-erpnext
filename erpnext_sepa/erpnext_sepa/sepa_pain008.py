@@ -32,7 +32,6 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-
 _NS = "urn:iso:std:iso:20022:tech:xsd:pain.008.001.02"
 
 
@@ -94,10 +93,10 @@ def build_pain008(
         lines.append("      <CdtrAgt>")
         lines.append("        <FinInstnId><BIC>" + _esc(creditor_bic) + "</BIC></FinInstnId>")
         lines.append("      </CdtrAgt>")
-        lines.append(f"      <CdtrSchmeId><Id><PrvtId><Othr>")
+        lines.append("      <CdtrSchmeId><Id><PrvtId><Othr>")
         lines.append(f"        <Id>{_esc(creditor_id)}</Id>")
-        lines.append(f"        <SchmeNm><Prtry>SEPA</Prtry></SchmeNm>")
-        lines.append(f"      </Othr></PrvtId></Id></CdtrSchmeId>")
+        lines.append("        <SchmeNm><Prtry>SEPA</Prtry></SchmeNm>")
+        lines.append("      </Othr></PrvtId></Id></CdtrSchmeId>")
 
         for inv in invoices:
             lines.extend(_tx_block(inv))

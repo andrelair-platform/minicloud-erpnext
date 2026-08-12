@@ -20,7 +20,6 @@ Prerequisites:
 
 import os
 import sys
-import json
 
 import frappe
 import requests
@@ -136,6 +135,7 @@ def setup_custom_fields():
 # GoCardless setup
 # ---------------------------------------------------------------------------
 
+
 def create_gc_customer() -> str:
     print("Creating GoCardless customer...")
     resp = _gc_post("/customers", GC_CUSTOMER)
@@ -174,10 +174,14 @@ def create_gc_mandate(bank_account_id: str) -> str:
 
 def store_gc_ids_on_customer(gc_customer_id: str, mandate_id: str):
     print(f"Storing GoCardless IDs on ERPNext customer '{CUSTOMER_FRAPPE_NAME}'...")
-    frappe.db.set_value("Customer", CUSTOMER_FRAPPE_NAME, {
-        "gc_customer_id": gc_customer_id,
-        "gc_mandate_id": mandate_id,
-    })
+    frappe.db.set_value(
+        "Customer",
+        CUSTOMER_FRAPPE_NAME,
+        {
+            "gc_customer_id": gc_customer_id,
+            "gc_mandate_id": mandate_id,
+        },
+    )
     frappe.db.commit()
     print("  Done.")
 
