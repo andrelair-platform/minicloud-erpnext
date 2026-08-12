@@ -25,15 +25,16 @@ jobs:
         run: pip install ruff mypy
 
       - name: ruff — lint
-        run: ruff check erpnext_dsn/ erpnext_facturx/ tests/
+        run: ruff check erpnext_dsn/ erpnext_facturx/ erpnext_sepa/ tests/
 
       - name: ruff — format check
-        run: ruff format --check erpnext_dsn/ erpnext_facturx/ tests/
+        run: ruff format --check erpnext_dsn/ erpnext_facturx/ erpnext_sepa/ tests/
 
       - name: mypy — type check
         run: |
           mypy erpnext_dsn/erpnext_dsn/ \
                erpnext_facturx/erpnext_facturx/ \
+               erpnext_sepa/erpnext_sepa/ \
                --ignore-missing-imports \
                --no-error-summary
 

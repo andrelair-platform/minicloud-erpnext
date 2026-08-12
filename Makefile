@@ -6,14 +6,14 @@ install-test-deps:
 
 # L0 — Static analysis
 lint:
-	ruff check erpnext_dsn/ erpnext_facturx/ tests/
-	ruff format --check erpnext_dsn/ erpnext_facturx/ tests/
-	mypy erpnext_dsn/erpnext_dsn/ erpnext_facturx/erpnext_facturx/ --ignore-missing-imports
+	ruff check erpnext_dsn/ erpnext_facturx/ erpnext_sepa/ tests/
+	ruff format --check erpnext_dsn/ erpnext_facturx/ erpnext_sepa/ tests/
+	mypy erpnext_dsn/erpnext_dsn/ erpnext_facturx/erpnext_facturx/ erpnext_sepa/erpnext_sepa/ --ignore-missing-imports
 
 # Auto-fix formatting (local only — never run in CI)
 fmt:
-	ruff format erpnext_dsn/ erpnext_facturx/ tests/
-	ruff check --fix erpnext_dsn/ erpnext_facturx/ tests/
+	ruff format erpnext_dsn/ erpnext_facturx/ erpnext_sepa/ tests/
+	ruff check --fix erpnext_dsn/ erpnext_facturx/ erpnext_sepa/ tests/
 
 # L1 — Unit tests (no Docker, no network)
 test:
