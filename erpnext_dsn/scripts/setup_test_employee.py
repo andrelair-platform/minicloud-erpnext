@@ -2,49 +2,85 @@
 Create a test employee with a salary structure and January 2026 salary slip.
 
 Run from inside the gunicorn pod:
-  cd /home/frappe/frappe-bench/sites
-  python /tmp/setup_test_employee.py
+  kubectl exec -n erp <gunicorn-pod> -- bash -c \
+    'cd /home/frappe/frappe-bench/sites && \
+     /home/frappe/frappe-bench/env/bin/python /tmp/setup_test_employee.py'
 
-Requires erpnext_dsn to be pip-installed and bench-registered:
-  bench --site erp.devandre.sbs install-app erpnext_dsn
+Requires hrms to be bench-installed in the ERPNext site:
+  bench --site erp.devandre.sbs install-app hrms
+
+Known ERPNext / hrms gotchas (discovered 2026-08):
+  1. HR Settings emp_created_by must be explicitly saved to tabSingles —
+     frappe.db.get_single_value returns '' until saved, even though the
+     in-memory default is "Naming Series".
+  2. Employee autoname is controlled by the Naming Series; "employee" field
+     supplied at insert time is ignored.  Capture emp.name AFTER insert.
+  3. Employment Type: the autoname field is "employee_type_name", not
+     "employment_type".
+  4. Department names get company-abbreviation suffix: "Assurance" → "Assurance - KS".
+  5. Salary Structure Assignment from_date must fall within an active Fiscal
+     Year — use 2026-01-01, not 2023-01-02.
+  6. hrms get_holiday_list_for_employee() queries the Holiday List Assignment
+     doctype (submitted), NOT the employee.holiday_list field.
+  7. The Salary Structure must be submitted (docstatus=1) for check_sal_struct()
+     to find it.  Insert alone leaves it at docstatus=0.
+  8. get_sal_slip_items() does not exist in hrms.  insert() calls validate()
+     which calls get_emp_and_working_day_details() — earnings/deductions are
+     populated automatically.
 """
 
 import frappe
-from frappe.utils import now_datetime
 
 frappe.init(site="erp.devandre.sbs")
 frappe.connect()
 
-COMPANY = "Ktayl Solutions"  # must match the ERPNext company name
+COMPANY = "Ktayl Solutions"  # exact company name in ERPNext
+DEPT_NAME = "Assurance - KS"  # ERPNext appends " - KS" (company abbreviation)
+SS_NAME = "CDI Temps Plein Assurance"
+HL_NAME = "Jours fériés France 2026"
 
 # ---------------------------------------------------------------------------
-# 1. Department
-# ERPNext appends " - KS" (company abbreviation) to department names.
+# 1. HR Settings — ensure emp_created_by is persisted (gotcha #1)
 # ---------------------------------------------------------------------------
-DEPT_NAME = "Assurance - KS"
+if not frappe.db.get_single_value("HR Settings", "emp_created_by"):
+    hr = frappe.get_single("HR Settings")
+    hr.emp_created_by = "Naming Series"
+    hr.save(ignore_permissions=True)
+    frappe.db.commit()
+    print("Set HR Settings: emp_created_by = Naming Series")
+
+# ---------------------------------------------------------------------------
+# 2. Department (gotcha #4)
+# ---------------------------------------------------------------------------
 if not frappe.db.exists("Department", DEPT_NAME):
-    dept = frappe.get_doc({
+    frappe.get_doc({
         "doctype": "Department",
         "department_name": "Assurance",
         "company": COMPANY,
         "parent_department": "All Departments",
-    })
-    dept.insert(ignore_permissions=True)
+    }).insert(ignore_permissions=True)
+    frappe.db.commit()
     print(f"Created department: {DEPT_NAME}")
 else:
     print(f"Department {DEPT_NAME} already exists")
 
 # ---------------------------------------------------------------------------
-# 2. Employee — Jean Dupont (NIR fictif pour qualification Net-Entreprises)
+# 3. Employment Types (gotcha #3: field is employee_type_name)
 # ---------------------------------------------------------------------------
-# NIR fictif: 1 82 01 75 056 037 xx (homme, né janvier 1982, Paris 6e)
-# En qualification, Net-Entreprises accepte les NIR fictifs.
-EMP_ID = "EMP-DSN-001"
+for et in ["CDI", "CDD", "Alternance", "Stage"]:
+    if not frappe.db.exists("Employment Type", et):
+        frappe.get_doc({"doctype": "Employment Type", "employee_type_name": et}).insert(ignore_permissions=True)
+        print(f"Created employment type: {et}")
+frappe.db.commit()
 
-if not frappe.db.exists("Employee", EMP_ID):
+# ---------------------------------------------------------------------------
+# 4. Employee — look up by employee_name, capture actual name after insert
+#    (gotchas #1 and #2)
+# ---------------------------------------------------------------------------
+EMP_ID = frappe.db.get_value("Employee", {"employee_name": "Jean Dupont"}, "name")
+if not EMP_ID:
     emp = frappe.get_doc({
         "doctype": "Employee",
-        "employee": EMP_ID,
         "employee_name": "Jean Dupont",
         "first_name": "Jean",
         "last_name": "Dupont",
@@ -55,8 +91,7 @@ if not frappe.db.exists("Employee", EMP_ID):
         "date_of_joining": "2023-01-02",
         "date_of_birth": "1982-01-15",
         "gender": "Male",
-        # DSN-specific custom fields (must exist on Employee doctype)
-        # Add via ERPNext Customize Form if not present.
+        # DSN-specific custom fields
         "custom_nir": "182017505603712",       # fictitious NIR (13 digits + 2 key)
         "custom_birth_department": "75",
         "custom_birth_city": "PARIS",
@@ -64,12 +99,14 @@ if not frappe.db.exists("Employee", EMP_ID):
         "custom_professional_status_code": "229",  # 229 = employé
     })
     emp.insert(ignore_permissions=True)
+    frappe.db.commit()
+    EMP_ID = emp.name  # capture name assigned by Naming Series (e.g. HR-EMP-00003)
     print(f"Created employee: {EMP_ID} — Jean Dupont")
 else:
-    print(f"Employee {EMP_ID} already exists")
+    print(f"Employee Jean Dupont already exists: {EMP_ID}")
 
 # ---------------------------------------------------------------------------
-# 3. Salary Component — Salaire de base
+# 5. Salary Components
 # ---------------------------------------------------------------------------
 for component in [
     {"salary_component": "Salaire de base", "salary_component_abbr": "SB",
@@ -80,16 +117,16 @@ for component in [
      "type": "Deduction", "is_tax_applicable": 0},
 ]:
     if not frappe.db.exists("Salary Component", component["salary_component"]):
-        sc = frappe.get_doc({"doctype": "Salary Component", **component})
-        sc.insert(ignore_permissions=True)
+        frappe.get_doc({"doctype": "Salary Component", **component}).insert(ignore_permissions=True)
         print(f"Created salary component: {component['salary_component']}")
+frappe.db.commit()
 
 # ---------------------------------------------------------------------------
-# 4. Salary Structure — CDI temps plein assurance
+# 6. Salary Structure — insert THEN submit (gotcha #7: check_sal_struct
+#    requires ss.docstatus == 1 via its SSA JOIN query)
 # ---------------------------------------------------------------------------
-SS_NAME = "CDI Temps Plein Assurance"
-
-if not frappe.db.exists("Salary Structure", SS_NAME):
+ss_docstatus = frappe.db.get_value("Salary Structure", SS_NAME, "docstatus")
+if ss_docstatus is None:
     ss = frappe.get_doc({
         "doctype": "Salary Structure",
         "name": SS_NAME,
@@ -109,30 +146,86 @@ if not frappe.db.exists("Salary Structure", SS_NAME):
         ],
     })
     ss.insert(ignore_permissions=True)
-    print(f"Created salary structure: {SS_NAME}")
+    ss.submit()
+    frappe.db.commit()
+    print(f"Created and submitted salary structure: {SS_NAME}")
+elif ss_docstatus == 0:
+    frappe.get_doc("Salary Structure", SS_NAME).submit()
+    frappe.db.commit()
+    print(f"Submitted existing salary structure: {SS_NAME}")
 else:
-    print(f"Salary structure {SS_NAME} already exists")
+    print(f"Salary structure {SS_NAME} already submitted")
 
 # ---------------------------------------------------------------------------
-# 5. Salary Structure Assignment
+# 7. Salary Structure Assignment — from_date in active FY (gotcha #5)
 # ---------------------------------------------------------------------------
-if not frappe.db.exists("Salary Structure Assignment", {"employee": EMP_ID, "salary_structure": SS_NAME}):
+if not frappe.db.exists("Salary Structure Assignment",
+                         {"employee": EMP_ID, "salary_structure": SS_NAME}):
     ssa = frappe.get_doc({
         "doctype": "Salary Structure Assignment",
         "employee": EMP_ID,
         "salary_structure": SS_NAME,
         "company": COMPANY,
-        "from_date": "2023-01-02",
+        "from_date": "2026-01-01",  # must be within an active Fiscal Year
         "base": 3500.00,
     })
     ssa.insert(ignore_permissions=True)
     ssa.submit()
+    frappe.db.commit()
     print(f"Created salary structure assignment for {EMP_ID}")
 else:
     print(f"Salary structure assignment for {EMP_ID} already exists")
 
 # ---------------------------------------------------------------------------
-# 6. Salary Slip — January 2026
+# 8. Holiday List 2026 (gotcha #6: hrms requires Holiday List Assignment,
+#    not employee.holiday_list field)
+# ---------------------------------------------------------------------------
+if not frappe.db.exists("Holiday List", HL_NAME):
+    hl = frappe.get_doc({
+        "doctype": "Holiday List",
+        "holiday_list_name": HL_NAME,
+        "from_date": "2026-01-01",
+        "to_date": "2026-12-31",
+        "holidays": [
+            {"description": "Jour de l'An", "holiday_date": "2026-01-01"},
+            {"description": "Lundi de Pâques", "holiday_date": "2026-04-06"},
+            {"description": "Fête du Travail", "holiday_date": "2026-05-01"},
+            {"description": "Victoire 1945", "holiday_date": "2026-05-08"},
+            {"description": "Ascension", "holiday_date": "2026-05-14"},
+            {"description": "Lundi de Pentecôte", "holiday_date": "2026-05-25"},
+            {"description": "Fête Nationale", "holiday_date": "2026-07-14"},
+            {"description": "Assomption", "holiday_date": "2026-08-15"},
+            {"description": "Toussaint", "holiday_date": "2026-11-01"},
+            {"description": "Armistice", "holiday_date": "2026-11-11"},
+            {"description": "Noël", "holiday_date": "2026-12-25"},
+        ],
+    })
+    hl.insert(ignore_permissions=True)
+    frappe.db.commit()
+    print(f"Created: {HL_NAME}")
+else:
+    print(f"Holiday list {HL_NAME} already exists")
+
+# Holiday List Assignment (submitted) for the employee
+if not frappe.db.exists("Holiday List Assignment",
+                         {"assigned_to": EMP_ID, "docstatus": 1}):
+    hla = frappe.get_doc({
+        "doctype": "Holiday List Assignment",
+        "holiday_list": HL_NAME,
+        "assigned_to": EMP_ID,
+        "from_date": "2026-01-01",
+    })
+    hla.insert(ignore_permissions=True)
+    hla.submit()
+    frappe.db.commit()
+    print(f"Created Holiday List Assignment for {EMP_ID}")
+else:
+    print(f"Holiday List Assignment for {EMP_ID} already exists")
+
+# ---------------------------------------------------------------------------
+# 9. Salary Slip — January 2026
+#    insert() triggers validate() → get_emp_and_working_day_details()
+#    which auto-populates earnings/deductions (gotcha #8: no get_sal_slip_items)
 # ---------------------------------------------------------------------------
 SLIP_EXISTS = frappe.db.exists("Salary Slip", {
     "employee": EMP_ID,
@@ -140,7 +233,6 @@ SLIP_EXISTS = frappe.db.exists("Salary Slip", {
     "end_date": "2026-01-31",
     "docstatus": ["!=", 2],
 })
-
 if not SLIP_EXISTS:
     slip = frappe.get_doc({
         "doctype": "Salary Slip",
@@ -150,20 +242,21 @@ if not SLIP_EXISTS:
         "start_date": "2026-01-01",
         "end_date": "2026-01-31",
         "posting_date": "2026-01-31",
-        "payment_days": 23,
-        "working_days": 23,
     })
     slip.insert(ignore_permissions=True)
-    # Calculate earnings/deductions from structure
-    slip.get_sal_slip_items()
-    slip.save()
     slip.submit()
-    print(f"Created and submitted salary slip for {EMP_ID} — January 2026")
+    frappe.db.commit()
+    print(f"Created and submitted salary slip: {slip.name}")
     print(f"  Gross: {slip.gross_pay} EUR  |  Net: {slip.net_pay} EUR")
 else:
-    print(f"Salary slip for {EMP_ID} January 2026 already exists")
+    existing = frappe.db.get_value("Salary Slip", {
+        "employee": EMP_ID, "start_date": "2026-01-01", "docstatus": ["!=", 2]
+    }, ["name", "gross_pay", "net_pay"], as_dict=True)
+    print(f"Salary slip {existing.name} already exists — "
+          f"gross: {existing.gross_pay} EUR, net: {existing.net_pay} EUR")
 
-frappe.db.commit()
-print("\n✅ Test employee setup complete.")
-print("Next: bench --site erp.devandre.sbs install-app erpnext_dsn")
-print("Then: call /api/method/erpnext_dsn.api.submit_monthly_dsn?year=2026&month=1")
+print(f"\n✅ Test employee setup complete.")
+print(f"   Company:  {COMPANY}")
+print(f"   Employee: {EMP_ID} (Jean Dupont)")
+print(f"\nNext — test the DSN API:")
+print(f"  POST /api/method/erpnext_dsn.api.submit_monthly_dsn?year=2026&month=1")
