@@ -7,15 +7,13 @@ We test the CII XML structure independently of PDF/A-3 embedding.
 
 import sys
 import xml.etree.ElementTree as ET
-from types import SimpleNamespace
-from unittest.mock import MagicMock
 
 import pytest
 
-from tests.conftest import make_company_doc, make_invoice_doc
-
 # Import _build_cii_xml after conftest has installed the frappe mock
 from erpnext_facturx.facturx import _build_cii_xml
+
+from tests.conftest import make_company_doc, make_invoice_doc
 
 RSM = "urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"
 RAM = "urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100"
@@ -116,11 +114,8 @@ class TestTradeParties:
     def test_siret_extracted_from_registration(self):
         """SIRET extracted from company registration_details field."""
         frappe = sys.modules["frappe"]
-        frappe.get_doc.return_value = make_company_doc(
-            registration_details="SIRET: 12345678901234"
-        )
+        frappe.get_doc.return_value = make_company_doc(registration_details="SIRET: 12345678901234")
         root = _xml()
-        siret_elem = root.find(f".//{{{RAM}}}ID[@{{schemeID}}='0002']")
         # Find by schemeID attribute
         seller = root.find(f".//{{{RAM}}}SellerTradeParty")
         regs = seller.findall(f".//{{{RAM}}}ID")  # type: ignore[union-attr]

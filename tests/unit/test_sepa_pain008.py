@@ -7,19 +7,18 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 
 import pytest
-
-from erpnext_sepa.sepa_pain008 import build_pain008, _esc, _msg_id
+from erpnext_sepa.sepa_pain008 import _esc, _msg_id, build_pain008
 
 # ---------------------------------------------------------------------------
 # Test fixtures
 # ---------------------------------------------------------------------------
 
-CREDITOR = dict(
-    creditor_name="Ktayl Solutions",
-    creditor_iban="FR7630006000019876543210189",
-    creditor_bic="BNPAFRPPXXX",
-    creditor_id="FR72ZZZ123456",
-)
+CREDITOR = {
+    "creditor_name": "Ktayl Solutions",
+    "creditor_iban": "FR7630006000019876543210189",
+    "creditor_bic": "BNPAFRPPXXX",
+    "creditor_id": "FR72ZZZ123456",
+}
 
 INVOICE_1 = {
     "invoice_name": "ACC-SINV-2026-00001",
@@ -46,7 +45,10 @@ INVOICE_2 = {
 }
 
 NS = "urn:iso:std:iso:20022:tech:xsd:pain.008.001.02"
-_Q = lambda tag: f"{{{NS}}}{tag}"
+
+
+def _Q(tag):
+    return f"{{{NS}}}{tag}"
 
 
 def _xml(invoices=None, **kwargs) -> ET.Element:
@@ -60,6 +62,7 @@ def _xml(invoices=None, **kwargs) -> ET.Element:
 # ---------------------------------------------------------------------------
 # Output format
 # ---------------------------------------------------------------------------
+
 
 class TestOutputFormat:
     def test_returns_bytes(self):
@@ -89,6 +92,7 @@ class TestOutputFormat:
 # ---------------------------------------------------------------------------
 # Group Header
 # ---------------------------------------------------------------------------
+
 
 class TestGroupHeader:
     def _grp_hdr(self, invoices=None):
@@ -132,6 +136,7 @@ class TestGroupHeader:
 # ---------------------------------------------------------------------------
 # Payment Information
 # ---------------------------------------------------------------------------
+
 
 class TestPaymentInfo:
     def _pmt_inf(self, invoices=None):
@@ -178,6 +183,7 @@ class TestPaymentInfo:
 # ---------------------------------------------------------------------------
 # Transaction block
 # ---------------------------------------------------------------------------
+
 
 class TestTransaction:
     def _txs(self, invoices=None):
@@ -243,6 +249,7 @@ class TestTransaction:
 # Edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestEdgeCases:
     def test_zero_invoices_produces_valid_xml(self):
         raw = build_pain008([], **CREDITOR)
@@ -267,6 +274,7 @@ class TestEdgeCases:
 # Helper: _esc
 # ---------------------------------------------------------------------------
 
+
 class TestEsc:
     def test_ampersand(self):
         assert _esc("A&B") == "A&amp;B"
@@ -284,6 +292,7 @@ class TestEsc:
 # ---------------------------------------------------------------------------
 # Helper: _msg_id
 # ---------------------------------------------------------------------------
+
 
 class TestMsgId:
     def test_starts_with_minicloud(self):

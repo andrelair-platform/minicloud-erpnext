@@ -9,8 +9,8 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from erpnext_dsn.dsn_submitter import _response_is_ok, submit_dsn
+
 from tests.fixtures.crm_responses import (
     ACCEPTE,
     ACCEPTE_NONZERO_CODE,
@@ -171,6 +171,7 @@ class TestSubmitDsn:
 
     def test_timeout_propagates(self):
         import requests as req_lib
+
         with patch.dict(os.environ, DSN_ENV):
             with patch("requests.post", side_effect=req_lib.exceptions.Timeout):
                 with pytest.raises(req_lib.exceptions.Timeout):
@@ -178,6 +179,7 @@ class TestSubmitDsn:
 
     def test_connection_error_propagates(self):
         import requests as req_lib
+
         with patch.dict(os.environ, DSN_ENV):
             with patch("requests.post", side_effect=req_lib.exceptions.ConnectionError):
                 with pytest.raises(req_lib.exceptions.ConnectionError):

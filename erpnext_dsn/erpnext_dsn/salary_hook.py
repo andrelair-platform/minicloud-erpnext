@@ -1,6 +1,5 @@
 import frappe
 
-
 _REQUIRED_EMPLOYEE_FIELDS = [
     ("custom_nir", "NIR (numéro de sécurité sociale)"),
     ("date_of_birth", "Date de naissance"),
@@ -14,9 +13,7 @@ def validate_dsn_fields(doc, method=None):
     """Warn (not block) when DSN-mandatory employee fields are missing."""
     employee = frappe.get_doc("Employee", doc.employee)
     missing = [
-        label
-        for field, label in _REQUIRED_EMPLOYEE_FIELDS
-        if not getattr(employee, field, None)
+        label for field, label in _REQUIRED_EMPLOYEE_FIELDS if not getattr(employee, field, None)
     ]
     if missing:
         frappe.msgprint(

@@ -9,13 +9,13 @@ import os
 from unittest.mock import patch
 
 import pytest
-
 from erpnext_dsn.dsn_generator import (
     _amount,
     _date8,
     _dsn_val,
     build_dsn,
 )
+
 from tests.fixtures.employees import (
     DARTAGNAN,
     FLOAT_AMOUNTS,
@@ -24,10 +24,10 @@ from tests.fixtures.employees import (
     MISSING_NIR,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers: build decoded lines for easier assertions
 # ---------------------------------------------------------------------------
+
 
 def _lines(slips: list[dict], year: int = 2026, month: int = 1) -> list[str]:
     raw = build_dsn(year, month, slips)
@@ -48,6 +48,7 @@ def _line_value(lines: list[str], rubric: str) -> str | None:
 # ---------------------------------------------------------------------------
 # Output encoding and line endings
 # ---------------------------------------------------------------------------
+
 
 class TestOutputFormat:
     def test_returns_bytes(self):
@@ -76,6 +77,7 @@ class TestOutputFormat:
 # ---------------------------------------------------------------------------
 # S10 — File header
 # ---------------------------------------------------------------------------
+
 
 class TestS10Header:
     def test_version_norme(self):
@@ -140,6 +142,7 @@ class TestS10Header:
 # S10 — Emitter
 # ---------------------------------------------------------------------------
 
+
 class TestS10Emitter:
     def test_type_emetteur(self):
         lines = _lines([JEAN_DUPONT])
@@ -154,6 +157,7 @@ class TestS10Emitter:
 # ---------------------------------------------------------------------------
 # S20.G00.05 — Identification individu
 # ---------------------------------------------------------------------------
+
 
 class TestS20Individu:
     def test_nir_present(self):
@@ -198,6 +202,7 @@ class TestS20Individu:
 # S20.G00.07 — Contrat de travail
 # ---------------------------------------------------------------------------
 
+
 class TestS20Contrat:
     def test_contract_number(self):
         lines = _lines([JEAN_DUPONT])
@@ -224,6 +229,7 @@ class TestS20Contrat:
 # ---------------------------------------------------------------------------
 # S20.G00.51 — Rémunération
 # ---------------------------------------------------------------------------
+
 
 class TestS20Remuneration:
     def test_remuneration_type(self):
@@ -255,6 +261,7 @@ class TestS20Remuneration:
 # S90 — Footer
 # ---------------------------------------------------------------------------
 
+
 class TestS90Footer:
     def test_one_employee_count(self):
         lines = _lines([JEAN_DUPONT])
@@ -272,6 +279,7 @@ class TestS90Footer:
 # ---------------------------------------------------------------------------
 # Multiple employees
 # ---------------------------------------------------------------------------
+
 
 class TestMultipleEmployees:
     def test_two_employees_both_nir_present(self):
@@ -296,6 +304,7 @@ class TestMultipleEmployees:
 # DSN value escaping
 # ---------------------------------------------------------------------------
 
+
 class TestDsnValEscaping:
     def test_quote_in_name_is_escaped(self):
         """Single quotes in values must be escaped with backslash."""
@@ -313,6 +322,7 @@ class TestDsnValEscaping:
 # ---------------------------------------------------------------------------
 # Pure helper functions
 # ---------------------------------------------------------------------------
+
 
 class TestDate8:
     def test_standard_date(self):

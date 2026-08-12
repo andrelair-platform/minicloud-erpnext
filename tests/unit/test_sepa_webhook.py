@@ -11,14 +11,12 @@ import sys
 from unittest.mock import MagicMock
 
 import pytest
-
 from erpnext_sepa.api import (
     _handle_payment_failed,
     _handle_payment_succeeded,
     _handle_setup_succeeded,
     _invoice_for_intent,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -60,6 +58,7 @@ SETUP_INTENT_SUCCEEDED = {
 # ---------------------------------------------------------------------------
 # _handle_payment_succeeded
 # ---------------------------------------------------------------------------
+
 
 class TestHandlePaymentSucceeded:
     def setup_method(self):
@@ -145,6 +144,7 @@ class TestHandlePaymentSucceeded:
 # _handle_payment_failed
 # ---------------------------------------------------------------------------
 
+
 class TestHandlePaymentFailed:
     def setup_method(self):
         self.frappe = sys.modules["frappe"]
@@ -184,6 +184,7 @@ class TestHandlePaymentFailed:
 # _handle_setup_succeeded
 # ---------------------------------------------------------------------------
 
+
 class TestHandleSetupSucceeded:
     def setup_method(self):
         self.frappe = sys.modules["frappe"]
@@ -215,6 +216,7 @@ class TestHandleSetupSucceeded:
 # ---------------------------------------------------------------------------
 # _invoice_for_intent
 # ---------------------------------------------------------------------------
+
 
 class TestInvoiceForIntent:
     def setup_method(self):

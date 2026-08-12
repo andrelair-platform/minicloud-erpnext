@@ -11,8 +11,8 @@ JEAN_DUPONT: dict = {
     "birth_city": "PARIS",
     "birth_country_code": "100",
     "date_of_joining": "2023-01-02",
-    "contract_type_code": "01",          # CDI
-    "professional_status_code": "229",   # employé
+    "contract_type_code": "01",  # CDI
+    "professional_status_code": "229",  # employé
     "gross_pay": 3500.00,
     "net_pay": 3097.50,
     "payment_days": 151.67,
@@ -29,7 +29,7 @@ MARIE_LECLERC: dict = {
     "birth_city": "LYON",
     "birth_country_code": "100",
     "date_of_joining": "2026-01-15",
-    "contract_type_code": "02",          # CDD
+    "contract_type_code": "02",  # CDD
     "professional_status_code": "229",
     "gross_pay": 2800.00,
     "net_pay": 2499.00,
@@ -56,6 +56,6 @@ DARTAGNAN: dict = {
 FLOAT_AMOUNTS: dict = {
     **JEAN_DUPONT,
     "employee_id": "HR-EMP-00007",
-    "gross_pay": 3500.999,    # must round to 3501.0
-    "net_pay": 3097.004,      # must round to 3097.0
+    "gross_pay": 3500.999,  # must round to 3501.0
+    "net_pay": 3097.004,  # must round to 3097.0
 }

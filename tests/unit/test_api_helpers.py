@@ -6,6 +6,7 @@ they are importable after the frappe sys.modules mock in conftest.py.
 """
 
 from erpnext_dsn.api import _collect_warnings, _contract_type_code
+
 from tests.fixtures.employees import JEAN_DUPONT, MISSING_NIR
 
 

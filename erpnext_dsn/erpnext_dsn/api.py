@@ -17,10 +17,10 @@ from frappe.utils.file_manager import save_file
 from erpnext_dsn.dsn_generator import build_dsn
 from erpnext_dsn.dsn_submitter import submit_dsn
 
-
 # ---------------------------------------------------------------------------
 # Public API methods
 # ---------------------------------------------------------------------------
+
 
 @frappe.whitelist()
 def generate_monthly_dsn(year: int, month: int) -> dict:
@@ -71,19 +71,21 @@ def submit_monthly_dsn(year: int, month: int) -> dict:
 
     # Store submission result as a comment on the anchor doc.
     status = "✅ Acceptée" if result["success"] else "❌ Rejetée"
-    frappe.get_doc({
-        "doctype": "Comment",
-        "comment_type": "Comment",
-        "reference_doctype": anchor_doctype,
-        "reference_name": anchor_name,
-        "content": (
-            f"<b>DSN {month:02d}/{year} — {status}</b><br>"
-            f"Endpoint: {result['endpoint']}<br>"
-            f"HTTP: {result['status_code']}<br>"
-            f"Soumis le: {result['submitted_at']}<br>"
-            f"<pre>{result['response_body'][:1024]}</pre>"
-        ),
-    }).insert(ignore_permissions=True)
+    frappe.get_doc(
+        {
+            "doctype": "Comment",
+            "comment_type": "Comment",
+            "reference_doctype": anchor_doctype,
+            "reference_name": anchor_name,
+            "content": (
+                f"<b>DSN {month:02d}/{year} — {status}</b><br>"
+                f"Endpoint: {result['endpoint']}<br>"
+                f"HTTP: {result['status_code']}<br>"
+                f"Soumis le: {result['submitted_at']}<br>"
+                f"<pre>{result['response_body'][:1024]}</pre>"
+            ),
+        }
+    ).insert(ignore_permissions=True)
 
     return result
 
@@ -91,6 +93,7 @@ def submit_monthly_dsn(year: int, month: int) -> dict:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _collect_slips(year: int, month: int) -> list[dict]:
     """Return DSN-ready dicts for all submitted Salary Slips in the given month."""
@@ -135,10 +138,10 @@ def _slip_to_dict(slip_name: str) -> dict:
 def _contract_type_code(employment_type: str) -> str:
     # Map ERPNext employment_type free-text to DSN contract nature code.
     mapping = {
-        "Temps plein": "01",   # CDI temps plein
+        "Temps plein": "01",  # CDI temps plein
         "CDI": "01",
         "CDD": "02",
-        "Alternance": "29",    # contrat d'apprentissage
+        "Alternance": "29",  # contrat d'apprentissage
         "Stage": "29",
     }
     return mapping.get(employment_type, "01")
@@ -157,6 +160,7 @@ def _collect_warnings(slips: list[dict]) -> list[str]:
 def _find_anchor(year: int, month: int) -> tuple[str, str]:
     """Find the Payroll Entry for the period, or fall back to the first Salary Slip."""
     from calendar import monthrange
+
     last_day = monthrange(year, month)[1]
     pe = frappe.db.get_value(
         "Payroll Entry",

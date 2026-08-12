@@ -40,28 +40,28 @@ sys.modules.setdefault("facturx", MagicMock(name="facturx"))
 
 def make_invoice_doc(**kwargs) -> SimpleNamespace:
     """Factory: minimal ERPNext Sales Invoice doc for Factur-X tests."""
-    defaults = dict(
-        name="ACC-SINV-2026-00001",
-        doctype="Sales Invoice",
-        company="Ktayl Solutions",
-        posting_date="2026-01-31",
-        customer="Cabinet Assurance Test",
-        currency="EUR",
-        net_total=1500.0,
-        total_taxes_and_charges=195.0,
-        grand_total=1695.0,
-        outstanding_amount=1695.0,
-    )
+    defaults = {
+        "name": "ACC-SINV-2026-00001",
+        "doctype": "Sales Invoice",
+        "company": "Ktayl Solutions",
+        "posting_date": "2026-01-31",
+        "customer": "Cabinet Assurance Test",
+        "currency": "EUR",
+        "net_total": 1500.0,
+        "total_taxes_and_charges": 195.0,
+        "grand_total": 1695.0,
+        "outstanding_amount": 1695.0,
+    }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
 
 
 def make_company_doc(**kwargs) -> SimpleNamespace:
     """Factory: minimal ERPNext Company doc."""
-    defaults = dict(
-        name="Ktayl Solutions",
-        registration_details="SIRET: 12345678901234",
-        tax_id="FR12345678901",
-    )
+    defaults = {
+        "name": "Ktayl Solutions",
+        "registration_details": "SIRET: 12345678901234",
+        "tax_id": "FR12345678901",
+    }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
