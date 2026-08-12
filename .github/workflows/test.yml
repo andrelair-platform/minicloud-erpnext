@@ -1,0 +1,79 @@
+name: "L0 + L1 — Lint & Unit Tests"
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main, staging]
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────
+  # L0 — Static analysis (every push, fail fast)
+  # ──────────────────────────────────────────────────────────────────
+  lint:
+    name: "L0 — ruff + mypy"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install lint dependencies
+        run: pip install ruff mypy
+
+      - name: ruff — lint
+        run: ruff check erpnext_dsn/ erpnext_facturx/ tests/
+
+      - name: ruff — format check
+        run: ruff format --check erpnext_dsn/ erpnext_facturx/ tests/
+
+      - name: mypy — type check
+        run: |
+          mypy erpnext_dsn/erpnext_dsn/ \
+               erpnext_facturx/erpnext_facturx/ \
+               --ignore-missing-imports \
+               --no-error-summary
+
+  # ──────────────────────────────────────────────────────────────────
+  # L1 — Unit tests (every push, requires lint to pass)
+  # ──────────────────────────────────────────────────────────────────
+  test-unit:
+    name: "L1 — pytest unit tests"
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install test dependencies
+        run: pip install -r requirements-test.txt
+
+      - name: Install app packages (editable, no frappe)
+        run: |
+          pip install -e erpnext_dsn/ --no-deps
+          pip install -e erpnext_facturx/ --no-deps
+
+      - name: pytest — unit tests with coverage
+        run: |
+          pytest tests/unit/ \
+            --cov \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=70 \
+            -v
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 14
