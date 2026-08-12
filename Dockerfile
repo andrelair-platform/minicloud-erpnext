@@ -7,6 +7,7 @@ USER root
 RUN /home/frappe/frappe-bench/env/bin/pip install \
     "factur-x==2.0.0" \
     "requests>=2.31.0" \
+    "stripe>=7.0.0" \
     --no-cache-dir
 
 # Bake erpnext_facturx Frappe app into the image
@@ -18,6 +19,11 @@ RUN /home/frappe/frappe-bench/env/bin/pip install -e \
 COPY erpnext_dsn/ /home/frappe/frappe-bench/apps/erpnext_dsn/
 RUN /home/frappe/frappe-bench/env/bin/pip install -e \
     /home/frappe/frappe-bench/apps/erpnext_dsn --no-cache-dir
+
+# Bake erpnext_sepa Frappe app into the image
+COPY erpnext_sepa/ /home/frappe/frappe-bench/apps/erpnext_sepa/
+RUN /home/frappe/frappe-bench/env/bin/pip install -e \
+    /home/frappe/frappe-bench/apps/erpnext_sepa --no-cache-dir
 
 # Install hrms (HR & Payroll module for frappe v16 — provides Salary Slip, Payroll Entry, etc.)
 # version-16 branch is the stable series for frappe/erpnext v16.x.
