@@ -1,28 +1,21 @@
-# Accepted risks — all CVEs below are in frappe/erpnext:v16.28.0 base image.
-# None are introduced by our layers (factur-x, pypdf, erpnext_facturx app).
-# Remediation: upgrade ERPNext base image when upstream ships a fixed release.
-
-# chromium-common / chromium-headless-shell (Debian package, used for PDF generation)
-CVE-2026-15764
-CVE-2026-15765
-CVE-2026-17651
-CVE-2026-17652
-CVE-2026-17653
-CVE-2026-17654
-CVE-2026-17655
-CVE-2026-17656
-
-# libgnutls30 (Debian base package)
-CVE-2026-33845
-CVE-2026-42010
-
-# loader-utils, shell-quote, tar (Node.js deps in ERPNext banking module)
-CVE-2022-37601
-CVE-2026-9277
+# Trivy ignore file — ONE scoped, justified exception. Never a blanket suppression.
+#
+# History: this file previously ignored ~17 base-image CRITICALs (chromium, libgnutls30,
+# loader-utils, shell-quote, tar, Go stdlib). As of the HR-12 change those are now actually
+# REMEDIATED in the Dockerfile instead of ignored:
+#   • chromium* + libgnutls30  → apt-get --only-upgrade to the fixed Debian 12 releases
+#   • GitPython + PyJWT        → pip --upgrade in BOTH the frappe venv and the base /usr/local python
+#   • esbuild (Go stdlib CVEs), loader-utils, shell-quote, launch-editor
+#                              → deleted (build-only node_modules; not in the runtime path; the
+#                                esbuild binary is even arm64 and can't run on this amd64 image)
+#
+# The single remaining exception cannot be fixed in our layer:
+#
+# CVE-2026-59873 — node-tar 7.5.1 (gzip-bomb DoS) bundled INSIDE the npm CLI
+#   (/home/frappe/.nvm/.../lib/node_modules/npm/node_modules/tar).
+#   • npm is a build/CLI-time tool, NEVER in ERPNext's request/runtime path → the DoS is not
+#     reachable in production (it would require running `npm` against a crafted archive).
+#   • The fix (an npm release bundling tar >= 7.5.19) needs node >= 24.15; frappe/erpnext:v16.28.0
+#     ships node 24.12, so `npm install -g npm@latest` fails EBADENGINE.
+#   • Revisit on the next ERPNext base bump (newer base → newer node+npm → clears on its own).
 CVE-2026-59873
-
-# Go stdlib (binary embedded in base image)
-CVE-2023-24538
-CVE-2023-24540
-CVE-2024-24790
-CVE-2025-68121
