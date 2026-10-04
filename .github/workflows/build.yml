@@ -3,10 +3,10 @@ name: build
 on:
   push:
     branches: [main, dev]
-    paths-ignore: ['docs/**', 'bmad/**', '**/*.md']
+    paths-ignore: ['docs/**', 'bmad/**', 'scripts/**', '**/*.md']
   pull_request:
     branches: [main]
-    paths-ignore: ['docs/**', 'bmad/**', '**/*.md']
+    paths-ignore: ['docs/**', 'bmad/**', 'scripts/**', '**/*.md']
 
 env:
   REGISTRY: harbor.10.0.0.200.nip.io
