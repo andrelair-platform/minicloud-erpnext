@@ -118,19 +118,26 @@ def _emit(  # pragma: no cover  (frappe enqueue I/O — proven live L4)
     except Exception:  # building must never break the HR transaction
         frappe.log_error(title="hr-lifecycle: build failed")
         return
+    # NB: the kwarg is `payload`, NOT `event` — `event` is a RESERVED frappe.enqueue parameter
+    # (scheduler event type: daily/hourly/…), so enqueue(event=…) is swallowed by frappe and never
+    # reaches publish() → "publish() missing 1 required positional argument". (Caught live L4.)
     frappe.enqueue(
         "erpnext_hr_lifecycle.events.publish",
         queue="short",
         job_name=f"hr-lifecycle-{event_type}-{employee_name}",
-        event=event,
+        payload=event,
     )
 
 
-def publish(event: dict) -> None:  # pragma: no cover  (NATS/HTTP I/O — proven live L4)
-    """Background worker: sign + publish to NATS (durable) and POST to n8n (fan-out). Best-effort."""
-    body = canonical_bytes(event)
+def publish(payload: dict) -> None:  # pragma: no cover  (NATS/HTTP I/O — proven live L4)
+    """Background worker: sign + publish to NATS (durable) and POST to n8n (fan-out). Best-effort.
+
+    ``payload`` is the lifecycle event dict (named `payload`, not `event`, to avoid the reserved
+    frappe.enqueue `event` kwarg — see _emit).
+    """
+    body = canonical_bytes(payload)
     signature = sign(body, _cfg("HR_LIFECYCLE_SIGNING_KEY"))
-    subject = f"{SUBJECT_PREFIX}.{event['event']}"
+    subject = f"{SUBJECT_PREFIX}.{payload['event']}"
 
     # 1. durable, signed backbone — NATS JetStream (ktayl-iam v3 consumes this later for access)
     try:
@@ -236,6 +243,6 @@ def emit_test_event(event_type: str = "joiner", employee: str | None = None):
         "erpnext_hr_lifecycle.events.publish",
         queue="short",
         job_name=f"hr-lifecycle-test-{event_type}",
-        event=event,
+        payload=event,  # `payload`, not `event` (reserved frappe.enqueue kwarg) — see _emit
     )
     return {"enqueued": True, "event": event}
