@@ -1,7 +1,7 @@
 ---
 id: HR-01-foundation-config
 title: "HR foundation config (fixtures) + BMAD-enable the repo"
-status: Draft
+status: Done
 type: Story
 epic: hr-workflows
 milestone: "HR Workflows — process automation"
