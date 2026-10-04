@@ -40,7 +40,7 @@ addopts = "-v --tb=short"
 filterwarnings = ["ignore::DeprecationWarning"]
 
 [tool.coverage.run]
-source = ["erpnext_dsn", "erpnext_facturx", "erpnext_sepa"]
+source = ["erpnext_dsn", "erpnext_facturx", "erpnext_sepa", "erpnext_hr_lifecycle"]
 omit = [
     "*/scripts/*",
     "*/hooks.py",
