@@ -21,10 +21,16 @@ Event → Business Rules → Approvals → Integrations → Actions → Audit   
 ```
 
 **Build shape — mostly configuration, not a new app.** Frappe ships every one of these modules; the
-work is **Workflow definitions** (committed as JSON in `workflows/`, the existing convention —
-cf. `sepa_invoice_to_payment.json`), **fixtures** (leave types, French holiday calendar, approval roles,
-onboarding/separation templates), **notifications**, and the **cross-system wiring** (expense→finance,
-documents→Docuseal, J/M/L→events). It is greenfield only in that **none of it is configured today**.
+work is **Frappe config-as-code**: Leave Types / Holiday List / Departments / Designations / Roles and
+the **Frappe Workflow** (doctype) definitions, applied two ways that match this repo's conventions:
+(1) **idempotent setup scripts** `scripts/hr/*.py` (standalone `frappe.init()+connect()` scripts, run in
+the gunicorn pod like `erpnext_dsn/scripts/setup_test_employee.py`) — the runnable source of truth, and
+(2) **`fixtures` in a custom app** (`hooks.py` + `fixtures/`, exported via `bench export-fixtures` →
+auto-applied by `bench migrate` — the same mechanism `erpnext_sepa` uses) so a fresh site self-configures.
+> ⚠️ The top-level **`workflows/*.json` are n8n flows** (invoice→payment), **NOT** Frappe Workflows —
+> the earlier draft wrongly cited them. Frappe Workflows live in the scripts/fixtures above.
+Plus **notifications** + the **cross-system wiring** (expense→finance, documents→Docuseal, J/M/L→events).
+It is greenfield only in that **none of it is configured today** (0 Leave/Workflow-Action records).
 
 ## The map — every workflow, where it lives, and its cross-board touchpoints
 
