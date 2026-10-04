@@ -2,9 +2,11 @@ name: build
 
 on:
   push:
-    branches: [main, staging, dev]
+    branches: [main, dev]
+    paths-ignore: ['docs/**', 'bmad/**', '**/*.md']
   pull_request:
     branches: [main]
+    paths-ignore: ['docs/**', 'bmad/**', '**/*.md']
 
 env:
   REGISTRY: harbor.10.0.0.200.nip.io
