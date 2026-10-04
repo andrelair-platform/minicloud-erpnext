@@ -25,16 +25,17 @@ jobs:
         run: pip install ruff mypy
 
       - name: ruff — lint
-        run: ruff check erpnext_dsn/ erpnext_facturx/ erpnext_sepa/ tests/
+        run: ruff check erpnext_dsn/ erpnext_facturx/ erpnext_sepa/ erpnext_hr_lifecycle/ tests/
 
       - name: ruff — format check
-        run: ruff format --check erpnext_dsn/ erpnext_facturx/ erpnext_sepa/ tests/
+        run: ruff format --check erpnext_dsn/ erpnext_facturx/ erpnext_sepa/ erpnext_hr_lifecycle/ tests/
 
       - name: mypy — type check
         run: |
           mypy erpnext_dsn/erpnext_dsn/ \
                erpnext_facturx/erpnext_facturx/ \
                erpnext_sepa/erpnext_sepa/ \
+               erpnext_hr_lifecycle/erpnext_hr_lifecycle/ \
                --ignore-missing-imports \
                --no-error-summary
 
@@ -62,6 +63,7 @@ jobs:
           pip install -e erpnext_dsn/ --no-deps
           pip install -e erpnext_facturx/ --no-deps
           pip install -e erpnext_sepa/ --no-deps
+          pip install -e erpnext_hr_lifecycle/ --no-deps
 
       - name: pytest — unit tests with coverage
         run: |
