@@ -8,12 +8,14 @@ USER root
 # A fresh Trivy scan surfaced CRITICALs that ship in the base image (they pre-date HR-12; the running
 # image carries the same). We SOLVE them here rather than suppress — patch what's patchable, delete
 # the build-only artifacts that aren't needed at production runtime (Frappe serves pre-built assets):
-#   (a) OS: a full `apt-get upgrade` pulls EVERY available Debian-12 security point-release (deb12u*)
-#       — chromium* + libgnutls30 (the original set) AND the base rot that accrues over time: as of
-#       2026-11 that is perl*/libperl5.36 (regex/heap/path-traversal), nginx*/nginx-common (HTTP/2
-#       + mail UAF) and libbrotli1 (decoder OOB-write). Tracking the Debian security channel wholesale
-#       is more durable than a hand-maintained package list that silently goes stale (it did — 21 new
-#       CRITICALs blocked the build until this switch).
+#   (a) OS: an EXPLICIT --only-upgrade list to the fixed Debian 12 releases. chromium* MUST be upgraded
+#       this targeted way, NOT via a blanket `apt-get upgrade` — a full upgrade holds chromium back
+#       ("2 not upgraded", a dep conflict) and leaves it on the vulnerable version (148 fixed CRITICALs),
+#       whereas `--only-upgrade chromium*` resolves just chromium's deps and upgrades it cleanly. The
+#       list is extended as the base rots: libgnutls30 + chromium* (original) + perl*/libperl5.36
+#       (regex/heap/path-traversal), nginx*/nginx-common (HTTP/2 + mail UAF), libbrotli1 (decoder
+#       OOB-write) — the 21 CRITICALs that surfaced 2026-11. `--only-upgrade` is a no-op for any name
+#       not installed, so the list is safe to over-specify.
 #   (b) Python: GitPython + PyJWT in BOTH the frappe venv AND the base /usr/local python;
 #   (c) node build-tooling: esbuild platform binaries (the Go-stdlib CVEs; the arm64 one can't even
 #       run on amd64), loader-utils, shell-quote + its only consumer launch-editor — all build/dev-time
@@ -21,7 +23,12 @@ USER root
 # The one residual (node-tar bundled inside the npm CLI, a build-time DoS not in the runtime path) is
 # unpatchable without a node bump the v16.28.0 base can't take → a single justified .trivyignore entry.
 RUN apt-get update \
- && apt-get upgrade -y \
+ && apt-get install -y --only-upgrade \
+      $(dpkg-query -W -f='${Package}\n' 'chromium*' 2>/dev/null | tr '\n' ' ') \
+      libgnutls30 \
+      perl perl-base perl-modules-5.36 libperl5.36 \
+      nginx nginx-common \
+      libbrotli1 \
  && rm -rf /var/lib/apt/lists/*
 RUN /usr/local/bin/pip install --no-cache-dir --upgrade "GitPython>=3.1.59" \
  && cd /home/frappe/frappe-bench/apps \
