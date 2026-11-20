@@ -31,7 +31,7 @@ RUN apt-get update \
       libbrotli1 \
  && rm -rf /var/lib/apt/lists/*
 RUN /usr/local/bin/pip install --no-cache-dir --upgrade "GitPython>=3.1.59" \
- && for pkg in "Brotli>=1.2.1" "Pillow>=13.0.0"; do \
+ && for pkg in "Brotli>=1.2.1" "Pillow>=13.0.0" "certifi>=2026.10.18" "uv>=0.13.4"; do \
       name="${pkg%%>*}"; \
       /usr/local/bin/pip show "$name" >/dev/null 2>&1 \
         && /usr/local/bin/pip install --no-cache-dir --upgrade "$pkg" || true; \
@@ -49,6 +49,7 @@ RUN /home/frappe/frappe-bench/env/bin/pip install \
     "PyJWT>=2.14.0" \
     "Brotli>=1.2.1" \
     "Pillow>=13.0.0" \
+    "certifi>=2026.10.18" \
     --no-cache-dir
 
 # Bake erpnext_facturx Frappe app into the image
