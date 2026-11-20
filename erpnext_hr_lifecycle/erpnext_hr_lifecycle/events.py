@@ -104,7 +104,9 @@ def _subject_payload(employee_name: str) -> dict:  # pragma: no cover  (frappe I
         # ADR-014 — the engagement: ktayl-iam mirrors these to tie a FIXED-TERM employee's access-expiry
         # to the contract end (CDI = open-ended → contract_end_date is normally empty → null).
         "employment_type": e.get("employment_type"),
-        "contract_end_date": str(e.get("contract_end_date")) if e.get("contract_end_date") else None,
+        "contract_end_date": (
+            str(e.get("contract_end_date")) if e.get("contract_end_date") else None
+        ),
     }
 
 
