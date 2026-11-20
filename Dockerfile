@@ -31,6 +31,11 @@ RUN apt-get update \
       libbrotli1 \
  && rm -rf /var/lib/apt/lists/*
 RUN /usr/local/bin/pip install --no-cache-dir --upgrade "GitPython>=3.1.59" \
+ && for pkg in "Brotli>=1.2.1" "Pillow>=13.0.0"; do \
+      name="${pkg%%>*}"; \
+      /usr/local/bin/pip show "$name" >/dev/null 2>&1 \
+        && /usr/local/bin/pip install --no-cache-dir --upgrade "$pkg" || true; \
+    done \
  && cd /home/frappe/frappe-bench/apps \
  && find . -type d -name 'esbuild-*' -prune -exec rm -rf {} + \
  && find . -type d \( -name loader-utils -o -name shell-quote -o -name launch-editor \) -prune -exec rm -rf {} +
@@ -42,6 +47,8 @@ RUN /home/frappe/frappe-bench/env/bin/pip install \
     "nats-py>=2.6.0" \
     "GitPython>=3.1.59" \
     "PyJWT>=2.14.0" \
+    "Brotli>=1.2.1" \
+    "Pillow>=13.0.0" \
     --no-cache-dir
 
 # Bake erpnext_facturx Frappe app into the image
